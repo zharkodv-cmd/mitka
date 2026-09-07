@@ -1,0 +1,40 @@
+{
+  "name": "astro-devbar",
+  "version": "0.1.0",
+  "description": "Dev-only bar for Astro sites: page switcher, layout grid, spacing/size/type inspectors in design px, Figma-style page comments with a CLI for Claude, breakpoint canvas and device preview.",
+  "type": "module",
+  "license": "MIT",
+  "types": "./types.d.ts",
+  "exports": {
+    ".": {
+      "types": "./types.d.ts",
+      "default": "./src/integration.mjs"
+    },
+    "./client": "./src/client/index.ts",
+    "./store": "./src/store/comments.mjs",
+    "./presets": {
+      "types": "./presets.d.ts",
+      "default": "./src/presets.mjs"
+    }
+  },
+  "bin": {
+    "devbar": "./bin/devbar.mjs"
+  },
+  "files": [
+    "src",
+    "bin",
+    "assets",
+    "types.d.ts",
+    "README.md",
+    "presets.d.ts"
+  ],
+  "scripts": {
+    "test": "node bin/devbar.mjs --selftest"
+  },
+  "peerDependencies": {
+    "astro": ">=5.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
