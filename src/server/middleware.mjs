@@ -13,7 +13,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join, isAbsolute } from 'node:path';
 import { createStore } from '../store/comments.mjs';
 import { CATEGORIES } from '../store/categories.mjs';
-import { BREAKPOINTS, DEVICES, ICONS } from '../presets.mjs';
+import { BREAKPOINTS, DEVICES, ICONS, FRAMES } from '../presets.mjs';
 
 const MIME = {
   png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml',
@@ -51,7 +51,10 @@ export function buildConfig({ root, options, routes }) {
       figmaOrder(a.name) - figmaOrder(b.name) ||
       a.route.localeCompare(b.route));
   const breakpoints = (options.breakpoints ?? BREAKPOINTS).map((b) => ({
-    frameH: null, device: null, frame: null, ...b,
+    frameH: null, device: null, ...b,
+    // a frame may be named ('macbook') rather than spelled out, so a project config
+    // needs no import from the package
+    frame: typeof b.frame === 'string' ? FRAMES[b.frame] ?? null : b.frame ?? null,
     max: Number.isFinite(b.max) ? b.max : null, // JSON has no Infinity; the client puts it back
     icon: b.icon ?? ICONS[b.id] ?? ICONS.desktop,
   }));
@@ -71,7 +74,7 @@ export function buildConfig({ root, options, routes }) {
 /**
  * @param {{ root: string, pkg: string, options: Record<string, any>, routes: () => any[] }} ctx
  */
-export function devbarMiddleware({ root, pkg, options, routes }) {
+export function mitkaMiddleware({ root, pkg, options, routes }) {
   const store = createStore(root);
 
   const send = (res, status, body, type = 'application/json') => {
@@ -144,7 +147,7 @@ export function devbarMiddleware({ root, pkg, options, routes }) {
     return send(res, 200, readFileSync(path), MIME[ext]);
   };
 
-  return async function devbar(req, res, next) {
+  return async function mitka(req, res, next) {
     if (!req.url || !req.url.startsWith('/__devbar/')) return next();
     const url = new URL(req.url, 'http://devbar');
     const path = url.pathname.slice('/__devbar/'.length);

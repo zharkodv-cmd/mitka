@@ -1,10 +1,7 @@
-import type { Breakpoint, Device, DeviceFrame } from './types';
+import type { Breakpoint, Device, DeviceFrame, FrameName } from './types';
 
 /** Device mockups shipped with the package, served under /__devbar/assets/ */
-export const FRAMES: Record<
-  'macbook' | 'ipad' | 'ipadLandscape' | 'iphone15Pro' | 'iphone11Pro' | 'iphone11ProMax' | 'iphone8' | 'iphoneLandscape',
-  DeviceFrame
->;
+export const FRAMES: Record<FrameName, DeviceFrame>;
 /** Switcher glyphs by breakpoint id */
 export const ICONS: Record<string, string>;
 /** The default four bands */

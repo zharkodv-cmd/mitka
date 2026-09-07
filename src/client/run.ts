@@ -3,9 +3,9 @@
 // copy — and the two talk through postMessage.
 import { categoryOf } from "../store/categories.mjs";
 import { stateOf, STATE_LABEL } from "../store/status.mjs";
-import type { DevbarConfig } from "./config";
+import type { MitkaConfig } from "./config";
 
-export function run(cfg: DevbarConfig) {
+export function run(cfg: MitkaConfig) {
   const BREAKPOINTS = cfg.breakpoints;
   const CATEGORIES = cfg.categories;
   const bpOf = (width: number) =>
@@ -792,7 +792,7 @@ export function run(cfg: DevbarConfig) {
         group.map((c) => one(c, seq)).join("\n\n");
     }).join("\n\n");
     return `${head}\n` +
-      `Work through them, then mark each one with \`npx devbar done <id> "what you did"\`.\n` +
+      `Work through them, then mark each one with \`npx mitka done <id> "what you did"\`.\n` +
       `That marks it done by you and leaves the thread open for me to confirm.\n\n${body}\n` +
       (waiting ? `\n(${waiting} more ${waiting === 1 ? "thread was" : "threads were"} resolved by me` +
         ` and are waiting to be checked \u2014 not listed.)\n` : "");

@@ -11,6 +11,10 @@ export interface DeviceFrame {
   sh: number;
 }
 
+export type FrameName =
+  | 'macbook' | 'ipad' | 'ipadLandscape' | 'iphone15Pro'
+  | 'iphone11Pro' | 'iphone11ProMax' | 'iphone8' | 'iphoneLandscape';
+
 export interface Breakpoint {
   id: string;
   label: string;
@@ -23,8 +27,10 @@ export interface Breakpoint {
   frameH?: number | null;
   /** which CSS shell to draw without a `frame`: 'laptop' | 'tablet' | 'phone' */
   device?: string | null;
-  /** a real mockup picture to sit the canvas inside */
-  frame?: DeviceFrame | null;
+  /** a real mockup picture to sit the canvas inside — one shipped with the package by
+   *  name ('macbook' | 'ipad' | 'ipadLandscape' | 'iphone15Pro' | 'iphone11Pro' |
+   *  'iphone11ProMax' | 'iphone8' | 'iphoneLandscape') or your own geometry */
+  frame?: DeviceFrame | FrameName | null;
   /** SVG paths for the switcher glyph (viewBox 0 0 20 20, stroked); defaults by id */
   icon?: string;
 }
@@ -40,7 +46,7 @@ export interface Device {
   frame: DeviceFrame;
 }
 
-export interface DevbarOptions {
+export interface MitkaOptions {
   /** `false` keeps the bar out entirely — the switch Playwright flips */
   enabled?: boolean;
   /** bands of the breakpoint switcher; defaults to the starter's four */
@@ -61,4 +67,4 @@ export interface DevbarOptions {
   zIndex?: number;
 }
 
-export default function devbar(options?: DevbarOptions): any;
+export default function mitka(options?: MitkaOptions): any;

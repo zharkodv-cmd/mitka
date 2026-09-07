@@ -1,7 +1,7 @@
 // Entry of the injected page script. Draws the bar from the config the dev server
 // hands out, so it is always the current page list and band set, and the same code
 // serves every project.
-import "./devbar.css";
+import "./mitka.css";
 import { loadConfig } from "./config";
 import { mount } from "./markup";
 import { run } from "./run";
@@ -12,7 +12,7 @@ loadConfig()
     mount(cfg);
     run(cfg);
   })
-  .catch((e) => console.warn("[astro-devbar] not started:", e));
+  .catch((e) => console.warn("[mitka] not started:", e));
 
 /* Editing the bar while it runs: it holds listeners on the document and window and may
    own a canvas iframe, so a hot re-run would stack a second bar on the first. A clean

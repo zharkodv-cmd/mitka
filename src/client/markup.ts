@@ -1,5 +1,5 @@
 // The bar's DOM, built once from config. Everything run.ts looks up by class is here.
-import type { DevbarConfig } from "./config";
+import type { MitkaConfig } from "./config";
 
 const esc = (v: string) =>
   v.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]!);
@@ -7,7 +7,7 @@ const esc = (v: string) =>
 const icon = (paths: string, size = 15) =>
   `<svg viewBox="0 0 20 20" width="${size}" height="${size}" aria-hidden="true">${paths}</svg>`;
 
-export function mount(cfg: DevbarConfig) {
+export function mount(cfg: MitkaConfig) {
   const current = location.pathname.replace(/\/$/, "") || "/";
 
   /* One chip per breakpoint that still has something on it — the band's own icon plus

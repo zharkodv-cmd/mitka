@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 // The comment queue from the terminal — what Claude uses to answer and close threads.
 //
-//   devbar                     open comments, newest last
-//   devbar all                 including done ones
-//   devbar done 3 "note"       resolve it as Claude + leave a note
-//   devbar note 3 "..."        reply without changing status
-//   devbar reply 3 "..."       same thing, clearer name
-//   devbar reopen 3
-//   devbar rm 3
-//   devbar digest              compact list for the SessionStart hook
-//   devbar count               one line for the UserPromptSubmit hook
-//   devbar --selftest
+//   mitka                      open comments, newest last
+//   mitka all                  including done ones
+//   mitka done 3 "note"        resolve it as Claude + leave a note
+//   mitka note 3 "..."         reply without changing status
+//   mitka reply 3 "..."        same thing, clearer name
+//   mitka reopen 3
+//   mitka rm 3
+//   mitka digest               compact list for the SessionStart hook
+//   mitka count                one line for the UserPromptSubmit hook
+//   mitka --selftest
 //
 // Root is the nearest directory with a package.json above the cwd, or `--root <dir>`.
 // The store is <root>/feedback/comments.json.
@@ -38,7 +38,7 @@ const text = rest.join(' ');
 
 if (cmd === '--selftest') {
   const assert = (await import('node:assert')).strict;
-  const dir = await mkdtemp(join(tmpdir(), 'devbar-'));
+  const dir = await mkdtemp(join(tmpdir(), 'mitka-'));
   const s = createStore(dir);
   const t = { comments: [] };
   const a = add(t, { route: '/', selector: 'h1', rx: 0.5, ry: 0.5, text: 'one', breakpoint: 'tablet' });
@@ -87,7 +87,7 @@ if (cmd === '--selftest') {
   s.save(t);
   assert.equal(s.load().comments.length, t.comments.length, 'save then load round-trips');
   await rm(dir, { recursive: true, force: true });
-  console.log('devbar selftest ok');
+  console.log('mitka selftest ok');
   process.exit(0);
 }
 
@@ -131,11 +131,11 @@ if (cmd === 'digest' || cmd === 'count') {
   const open = db.comments.filter((c) => stateOf(c) === 'open');
   if (!open.length) process.exit(0);
   if (cmd === 'count') {
-    console.log(`${open.length} open page comment${open.length === 1 ? '' : 's'} in feedback/comments.json — read them with \`npx devbar\`.`);
+    console.log(`${open.length} open page comment${open.length === 1 ? '' : 's'} in feedback/comments.json — read them with \`npx mitka\`.`);
     process.exit(0);
   }
   const CAP = 15;
-  console.log(`Open page comments (${open.length}). Reply with \`npx devbar reply <id> "..."\`, close with \`npx devbar done <id> "..."\`.`);
+  console.log(`Open page comments (${open.length}). Reply with \`npx mitka reply <id> "..."\`, close with \`npx mitka done <id> "..."\`.`);
   let route = '';
   for (const c of open.slice(0, CAP)) {
     if (c.route !== route) { route = c.route; console.log(route); }

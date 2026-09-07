@@ -1,7 +1,7 @@
 {
-  "name": "astro-devbar",
+  "name": "mitka",
   "version": "0.1.0",
-  "description": "Dev-only bar for Astro sites: page switcher, layout grid, spacing/size/type inspectors in design px, Figma-style page comments with a CLI for Claude, breakpoint canvas and device preview.",
+  "description": "Mitka — a dev-only bar for Astro sites: page switcher, layout grid, spacing/size/type inspectors in design px, Figma-style page comments with a CLI for Claude, breakpoint canvas and device preview.",
   "type": "module",
   "license": "MIT",
   "types": "./types.d.ts",
@@ -18,7 +18,7 @@
     }
   },
   "bin": {
-    "devbar": "./bin/devbar.mjs"
+    "mitka": "./bin/mitka.mjs"
   },
   "files": [
     "src",
@@ -29,7 +29,7 @@
     "presets.d.ts"
   ],
   "scripts": {
-    "test": "node bin/devbar.mjs --selftest"
+    "test": "node bin/mitka.mjs --selftest"
   },
   "peerDependencies": {
     "astro": ">=5.0.0"

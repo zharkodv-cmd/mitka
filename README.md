@@ -1,39 +1,44 @@
-# astro-devbar
+# mitka
 
-A dev-only bar for Astro sites. One integration, nothing in the build.
+Мітка — a dev-only bar for Astro sites. One integration, nothing in the build.
 
 - **Pages** menu grouped the way the Figma file is, with open-comment counts per breakpoint.
 - **Grid** overlay on the project's own `.container` / `.grid`.
 - **Spacing / Size / Typography** inspectors reporting *design* px (actual px ÷ the fluid root scale), with the colour token behind every colour.
 - **Comments**: Figma-style pins on any element, threads, categories, pasted screenshots, per-breakpoint. Stored in the repo (`feedback/comments.json` + `feedback/images/`), read by Claude through the CLI.
-- **Breakpoint canvas**: the page in an iframe at a band's width, draggable inside the band, real device mockup around it. Comments are written here and tagged with the band.
+- **Breakpoint canvas**: the page in an iframe at a band's width, draggable inside the band. Comments are written here and tagged with the band.
 - **Device preview**: fixed real device widths in real shells — viewing only.
+
+Sister tool of [Mistok](../mistok) (the Figma bridge): Mistok is the bridge into Figma, Mitka the marks on the site.
 
 ## Install
 
-```sh
-npm i -D astro-devbar
+Private repo, so a project installs it from a tag and keeps it optional — a machine
+without access (Vercel) skips it and builds without the bar:
+
+```json
+"optionalDependencies": { "mitka": "github:zharkodv-cmd/mitka#v0.1.0" }
 ```
 
 ```js
 // astro.config.mjs
-import devbar from 'astro-devbar';
+const mitka = await import('mitka').then((m) => m.default).catch(() => null);
 
 export default defineConfig({
   integrations: [
-    devbar({
-      enabled: process.env.PUBLIC_DEV_CHROME !== 'off', // e.g. off for Playwright
-    }),
+    ...(mitka ? [mitka({ enabled: process.env.PUBLIC_DEV_CHROME !== 'off' })] : []),
   ],
 });
 ```
 
 That is all. The integration injects the bar into every page under `astro dev` and serves its endpoints under `/__devbar/`. Under `astro build` it does nothing.
 
+While working on the bar itself: `npm link ../mitka` in the project (a symlink that `npm install` undoes).
+
 ## Options
 
 ```ts
-devbar({
+mitka({
   enabled?: boolean;                 // default true
   breakpoints?: Breakpoint[];        // default: desktop ≥992 / tablet / landscape / portrait
   devices?: Device[];                // default: eight Apple devices
@@ -46,11 +51,11 @@ devbar({
 })
 ```
 
-Device mockups ship with the package. Reference them from `astro-devbar/presets`:
+A breakpoint's `frame` is a mockup shipped with the package, by name — no import needed:
 
 ```js
-import { FRAMES } from 'astro-devbar/presets';
-{ id: 'laptop', label: 'Laptop', min: 992, max: 1512, ideal: 1440, frameH: 900, device: 'laptop', frame: FRAMES.macbook }
+{ id: 'laptop', label: 'Laptop', min: 992, max: 1512, ideal: 1440, frameH: 900, device: 'laptop', frame: 'macbook' }
+// macbook · ipad · ipadLandscape · iphone15Pro · iphone11Pro · iphone11ProMax · iphone8 · iphoneLandscape
 ```
 
 Unlisted pages are named from their `<title>` (the part after an em dash), else from the route.
@@ -58,15 +63,15 @@ Unlisted pages are named from their `<title>` (the part after an em dash), else 
 ## The comment queue (CLI)
 
 ```
-npx devbar                     open comments, newest last
-npx devbar all                 including resolved
-npx devbar reply <id> "..."    answer in the thread as Claude
-npx devbar done <id> "..."     resolve as Claude + note (stays highlighted until you confirm)
-npx devbar note <id> "..."     reply without changing status
-npx devbar reopen <id>
-npx devbar rm <id>             delete the thread and its screenshots
-npx devbar digest              compact open list (SessionStart hook)
-npx devbar count               one line (UserPromptSubmit hook)
+npx mitka                     open comments, newest last
+npx mitka all                 including resolved
+npx mitka reply <id> "..."    answer in the thread as Claude
+npx mitka done <id> "..."     resolve as Claude + note (stays highlighted until you confirm)
+npx mitka note <id> "..."     reply without changing status
+npx mitka reopen <id>
+npx mitka rm <id>             delete the thread and its screenshots
+npx mitka digest              compact open list (SessionStart hook)
+npx mitka count               one line (UserPromptSubmit hook)
 ```
 
 The root is the nearest directory with a `package.json` above the cwd, or `--root <dir>`.
@@ -75,24 +80,24 @@ Claude Code hooks (`.claude/settings.json`):
 
 ```json
 "SessionStart": [{ "hooks": [{ "type": "command",
-  "command": "node \"$CLAUDE_PROJECT_DIR/node_modules/astro-devbar/bin/devbar.mjs\" --root \"$CLAUDE_PROJECT_DIR\" digest" }] }],
+  "command": "node \"$CLAUDE_PROJECT_DIR/node_modules/mitka/bin/mitka.mjs\" --root \"$CLAUDE_PROJECT_DIR\" digest" }] }],
 "UserPromptSubmit": [{ "hooks": [{ "type": "command",
-  "command": "node \"$CLAUDE_PROJECT_DIR/node_modules/astro-devbar/bin/devbar.mjs\" --root \"$CLAUDE_PROJECT_DIR\" count" }] }]
+  "command": "node \"$CLAUDE_PROJECT_DIR/node_modules/mitka/bin/mitka.mjs\" --root \"$CLAUDE_PROJECT_DIR\" count" }] }]
 ```
 
-Both print nothing while the queue is empty.
+Both print nothing while the queue is empty, and nothing at all when the package is not installed.
 
 ## Layout
 
 ```
-src/integration.mjs      the Astro integration (injectScript + dev middleware)
+src/integration.mjs       the Astro integration (injectScript + dev middleware)
 src/server/middleware.mjs /__devbar/* endpoints
-src/store/               comments.json store, categories, status — shared by CLI and server
-src/presets.mjs          frames, devices, default breakpoints, switcher icons
-src/client/              the bar: markup.ts builds the DOM, run.ts is the behaviour, devbar.css
-bin/devbar.mjs           the CLI
-assets/                  device mockups, served under /__devbar/assets/
-tools/                   measure-device-frames.mjs (screen cut-out geometry), crop-device-frame.mjs
+src/store/                comments.json store, categories, status — shared by CLI and server
+src/presets.mjs           frames, devices, default breakpoints, switcher icons
+src/client/               the bar: markup.ts builds the DOM, run.ts is the behaviour, mitka.css
+bin/mitka.mjs             the CLI
+assets/                   device mockups, served under /__devbar/assets/
+tools/                    measure-device-frames.mjs (screen cut-out geometry), crop-device-frame.mjs
 ```
 
 `npm test` runs the store selftest.
@@ -102,3 +107,4 @@ tools/                   measure-device-frames.mjs (screen cut-out geometry), cr
 - Everything the bar draws is sized in px on purpose: sites built on a fluid root font-size would otherwise scale the dev UI with the design.
 - The canvas is the same page in an iframe; the script runs in both copies and they talk through `postMessage`.
 - Screenshots live on disk next to the JSON, never inside it.
+- Endpoint prefix `/__devbar/` and class prefix `dt-` predate the name and stay.
