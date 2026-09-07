@@ -30,7 +30,7 @@ export interface Breakpoint {
   /** a real mockup picture to sit the canvas inside — one shipped with the package by
    *  name ('macbook' | 'ipad' | 'ipadLandscape' | 'iphone15Pro' | 'iphone11Pro' |
    *  'iphone11ProMax' | 'iphone8' | 'iphoneLandscape') or your own geometry */
-  frame?: DeviceFrame | FrameName | null;
+  frame?: DeviceFrame | FrameName | (string & {}) | null;
   /** SVG paths for the switcher glyph (viewBox 0 0 20 20, stroked); defaults by id */
   icon?: string;
 }
