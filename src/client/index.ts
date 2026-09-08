@@ -5,12 +5,19 @@ import "./mitka.css";
 import { loadConfig } from "./config";
 import { mount } from "./markup";
 import { run } from "./run";
+import { keepAboveModals } from "./toplayer";
 
 loadConfig()
   .then((cfg) => {
     document.documentElement.style.setProperty("--dt-z", String(cfg.zIndex));
     mount(cfg);
     run(cfg);
+    // everything the bar draws, except the canvas iframe (see toplayer.ts)
+    keepAboveModals(
+      [".dt-grid-overlay", ".dt-pad-overlay", ".dt-notes-overlay", ".dt-notes-hi", ".dt-history", ".devtools"]
+        .map((s) => document.querySelector<HTMLElement>(s))
+        .filter((el): el is HTMLElement => !!el),
+    );
   })
   .catch((e) => console.warn("[mitka] not started:", e));
 

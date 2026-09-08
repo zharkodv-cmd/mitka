@@ -219,9 +219,15 @@
     top: -3px;
     right: -3px;
     pointer-events: none;
+    /* a circle: side padding turned it into an oval on everything wider than one
+       digit — 18px on the tick, 25px on the starburst. Grid centring holds the
+       glyph in the middle of that circle; a count past 99 is the only thing that
+       stretches it, and then a pill is the right shape anyway. */
+    display: grid;
+    place-items: center;
     min-width: 14px;
     height: 14px;
-    padding: 0 3px;
+    padding: 0;
     box-sizing: border-box;
     background: #f5c451;
     border: 2px solid #1c1c1e;
@@ -241,12 +247,37 @@
     background: #22a06b;
     color: #fff;
   }
+  /* `.dt-icon svg` above sizes every glyph in the bar to 15px, and the badge sits
+     inside one of those buttons — so my starburst rendered at 15px in a 10px box and
+     hung 5px out of the bottom of the badge (user 2026-09-08: "іконка вилізла, не
+     було такого раніше був чіткий круг"). Same specificity, so this wins on order;
+     the size is stated here rather than left to the svg's own attributes. */
   .dt-notes-count svg {
     display: block;
-    margin: 0 auto;
+    width: 8px;
+    height: 8px;
   }
   .dt-notes-count[hidden] {
     display: none;
+  }
+
+  /* The popover host the bar moves into while a modal dialog is open (toplayer.ts).
+     Zero size at the corner, so it hit-tests nothing itself; the fixed children
+     inside it paint where they always did. Every UA [popover] default is undone —
+     inset, auto margins, fit-content box, border, padding, canvas colours. */
+  .dt-host {
+    position: fixed;
+    inset: auto;
+    left: 0;
+    top: 0;
+    width: 0;
+    height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    overflow: visible;
   }
 
   /* Breakpoint switcher: the glyph is a rectangle in the device's own proportions,

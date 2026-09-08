@@ -33,6 +33,8 @@ export default defineConfig({
 
 That is all. The integration injects the bar into every page under `astro dev` and serves its endpoints under `/__devbar/`. Under `astro build` it does nothing.
 
+The bar stays above the page's own modal `<dialog>`s: `showModal` is wrapped so the bar moves into a popover host inside the open dialog (not inert, top layer, viewport-positioned) and back out on close.
+
 While working on the bar itself: `npm link ../mitka` in the project (a symlink that `npm install` undoes).
 
 ## Options
