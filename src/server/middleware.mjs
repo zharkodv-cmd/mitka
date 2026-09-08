@@ -67,7 +67,11 @@ export function buildConfig({ root, options, routes }) {
     sanity: Boolean(options.sanity),
     ignore: options.ignore ?? [],
     grid: { container: 'container', grid: 'grid', columns: 12, ...options.grid },
-    zIndex: options.zIndex ?? 100,
+    // Above everything a page can produce, Astro's own dev toolbar (2000000010)
+    // included: this is dev chrome, and a bar you cannot click because a modal,
+    // a mega-menu or a skip link landed on top of it is not a bar. The CSS adds
+    // at most +5, so this stays clear of the int32 ceiling.
+    zIndex: options.zIndex ?? 2000000020,
   };
 }
 

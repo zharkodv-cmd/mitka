@@ -47,7 +47,7 @@ mitka({
   sanity?: boolean;                  // show the toggle for Sanity's visual-editing overlay
   ignore?: string[];                 // extra selectors the inspectors skip, e.g. ['.kit-nav']
   grid?: { container?: string; grid?: string; columns?: number }; // default container/grid/12
-  zIndex?: number;                   // default 100
+  zIndex?: number;                   // default 2000000020 — above Astro's dev toolbar and any app modal
 })
 ```
 
