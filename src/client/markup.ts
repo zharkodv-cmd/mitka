@@ -10,10 +10,13 @@ const icon = (paths: string, size = 15) =>
 export function mount(cfg: MitkaConfig) {
   const current = location.pathname.replace(/\/$/, "") || "/";
 
-  /* One chip per breakpoint that still has something on it — the band's own icon plus
-     a count, so "3 on Tuition" says which sizes to open. The script fills the numbers. */
+  /* One chip per breakpoint that still has something on it — the band's own icon plus a
+     number per state, so "3 on Tuition" says which sizes to open and in what shape they
+     are. One number for the three states hid the only one that is work: a band with one
+     open thread and nine I had closed read as a blue ten. The script fills them. */
   const chips = cfg.breakpoints
-    .map((bp) => `<b data-bp="${esc(bp.id)}" hidden>${icon(bp.icon, 11)}<i></i></b>`)
+    .map((bp) => `<b data-bp="${esc(bp.id)}" hidden>${icon(bp.icon, 11)}` +
+      `<i data-n="open" hidden></i><i data-n="claude" hidden></i><i data-n="done" hidden></i></b>`)
     .join("");
   const pages = cfg.groups
     .map((g) =>

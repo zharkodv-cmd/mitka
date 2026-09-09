@@ -854,13 +854,15 @@ export function run(cfg: MitkaConfig) {
       const bp = c.breakpoint || "desktop";
       (t.bands[bp] ??= zero())[st]++;
     }
-    /* A chip is one state, so the number never mixes them: what is still to do while
-       anything is, and the resolved count only once nothing is. A blue 29 on a band
-       holding one open thread and 28 finished ones says the wrong thing entirely.
-       What the eye is hiding does not count: a page whose only threads are resolved
-       goes back to reading as empty the moment you switch it off. */
-    const shownOf = (c: Count) =>
-      c.open + c.claude || (showResolved ? c.done : 0);
+    /* Every state keeps its own number in the chip, in its own colour — one number for
+       all three hid the only one that is work: a band with one open thread and nine I
+       had closed read as a blue ten. What the eye is hiding does not count anywhere in
+       here, so a page whose threads are all resolved goes back to reading as empty the
+       moment you switch it off. */
+    const STATES = ["open", "claude", "done"] as const;
+    const countsOf = (c: Count) =>
+      STATES.map((k) => [k, k === "done" && !showResolved ? 0 : c[k]] as const);
+    const shownOf = (c: Count) => countsOf(c).reduce((n, [, v]) => n + v, 0);
     for (const link of document.querySelectorAll<HTMLAnchorElement>(".dt-pages a")) {
       const n = link.querySelector<HTMLElement>(".dt-pages-n");
       if (!n) continue;
@@ -871,11 +873,11 @@ export function run(cfg: MitkaConfig) {
         const shown = band ? shownOf(band) : 0;
         chip.hidden = !shown;
         if (!band || !shown) continue;
-        chip.querySelector("i")!.textContent = String(shown);
-        /* Blue the moment anything on that band is untouched: what nobody has looked
-           at outranks what is merely waiting to be checked, which outranks what is
-           already signed off. */
-        chip.dataset.state = band.open ? "open" : band.claude ? "claude" : "done";
+        for (const [k, v] of countsOf(band)) {
+          const slot = chip.querySelector<HTMLElement>(`[data-n="${k}"]`)!;
+          slot.hidden = !v;
+          slot.textContent = String(v);
+        }
         chip.title = `${bp.label}: ${band.open} open \u00b7 ${band.claude} to check` +
           ` \u00b7 ${band.done} resolved`;
       }

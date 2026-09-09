@@ -1,6 +1,6 @@
 {
   "name": "mitka",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Mitka — a dev-only bar for Astro sites: page switcher, layout grid, spacing/size/type inspectors in design px, Figma-style page comments with a CLI for Claude, breakpoint canvas and device preview.",
   "type": "module",
   "license": "MIT",
