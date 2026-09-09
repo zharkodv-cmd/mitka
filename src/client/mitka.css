@@ -638,20 +638,17 @@
   .dt-pages-n {
     flex: none;
     display: flex;
-    gap: 4px;
+    gap: 3px; /* a band can bring three chips now, and the row is 320px wide */
     font-style: normal;
   }
-  /* The pill is the band, the numbers inside it are the states — so the pill itself is
-     neutral and the colour lives on the digits. A solid pill could only ever wear one
-     state, and the band that mattered was the one carrying two. */
+  /* A chip is one band in one state, so it wears that state whole: the icon says which
+     size, the colour which state, the number how many. */
   .dt-pages-n b {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 2px 6px 2px 5px;
-    background: rgb(255 255 255 / 0.08);
+    gap: 3px;
+    padding: 2px 5px 2px 4px;
     border-radius: 999px;
-    color: #8e8e93;
     font: 600 9px/1.4 ui-sans-serif, system-ui, sans-serif;
     font-variant-numeric: tabular-nums;
   }
@@ -672,17 +669,22 @@
     stroke-linecap: round;
     stroke-linejoin: round;
   }
-  /* Blue for what is still to do, the same blue an untouched pin wears; clay for what I
-     closed and you have not checked, the colour my mark wears everywhere else; green for
-     signed off. Lifted off the solid-pill values, which were mixed on white — these sit
-     on a dark pill and have to read at 9px. */
-  .dt-pages-n b i[data-n="open"] {
-    color: #4aa8ff;
+  /* Blue for what is still to do, the same blue an untouched pin wears. The toolbar's
+     own badge keeps its yellow — it sits on the comment button, which turns blue when
+     the mode is on, and blue on blue is no badge at all. */
+  .dt-pages-n b[data-state="open"] {
+    background: #0d99ff;
+    color: #fff;
   }
-  .dt-pages-n b i[data-n="claude"] {
-    color: #e08a6c;
+  .dt-pages-n b[data-state="claude"] {
+    background: #d97757;
+    color: #fff;
   }
-  .dt-pages-n b i[data-n="done"] {
+  /* Signed off, so it is history rather than work: tinted rather than solid. Twenty
+     pages of solid green outshouted the two that still hold something, which is the one
+     thing this row exists to show. */
+  .dt-pages-n b[data-state="done"] {
+    background: rgb(34 160 107 / 0.18);
     color: #4cc38a;
   }
   /* A long label is clipped rather than pushing the device size off the row. Pages

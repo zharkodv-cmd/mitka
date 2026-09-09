@@ -854,12 +854,14 @@ export function run(cfg: MitkaConfig) {
       const bp = c.breakpoint || "desktop";
       (t.bands[bp] ??= zero())[st]++;
     }
-    /* Every state keeps its own number in the chip, in its own colour — one number for
-       all three hid the only one that is work: a band with one open thread and nine I
-       had closed read as a blue ten. What the eye is hiding does not count anywhere in
-       here, so a page whose threads are all resolved goes back to reading as empty the
-       moment you switch it off. */
+    /* Every state gets its own chip — one chip for all three hid the only one that is
+       work: a band with one open thread and nine I had closed read as a blue ten. What
+       the eye is hiding does not count anywhere in here, so a page whose threads are all
+       resolved goes back to reading as empty the moment you switch it off. */
     const STATES = ["open", "claude", "done"] as const;
+    const STATE_TITLE = {
+      open: "open", claude: "resolved by Claude, to check", done: "resolved",
+    } as const;
     const countsOf = (c: Count) =>
       STATES.map((k) => [k, k === "done" && !showResolved ? 0 : c[k]] as const);
     const shownOf = (c: Count) => countsOf(c).reduce((n, [, v]) => n + v, 0);
@@ -868,18 +870,14 @@ export function run(cfg: MitkaConfig) {
       if (!n) continue;
       const t = tally[new URL(link.href).pathname.replace(/\/+$/, "") || "/"];
       for (const bp of BREAKPOINTS) {
-        const chip = n.querySelector<HTMLElement>(`[data-bp="${bp.id}"]`)!;
         const band = t?.bands[bp.id];
-        const shown = band ? shownOf(band) : 0;
-        chip.hidden = !shown;
-        if (!band || !shown) continue;
-        for (const [k, v] of countsOf(band)) {
-          const slot = chip.querySelector<HTMLElement>(`[data-n="${k}"]`)!;
-          slot.hidden = !v;
-          slot.textContent = String(v);
+        for (const [k, v] of countsOf(band ?? zero())) {
+          const chip = n.querySelector<HTMLElement>(`[data-bp="${bp.id}"][data-state="${k}"]`)!;
+          chip.hidden = !v;
+          if (!v) continue;
+          chip.querySelector("i")!.textContent = String(v);
+          chip.title = `${bp.label}: ${v} ${STATE_TITLE[k]}`;
         }
-        chip.title = `${bp.label}: ${band.open} open \u00b7 ${band.claude} to check` +
-          ` \u00b7 ${band.done} resolved`;
       }
       const total = t ? shownOf(t) : 0;
       n.hidden = !total;
