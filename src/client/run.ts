@@ -35,7 +35,7 @@ export function run(cfg: MitkaConfig) {
   btn.addEventListener("click", () => setGrid(overlay.hidden === true));
 
   // Summary shows the page name from <title> ("Coast Flight — UI Kit" → "UI Kit")
-  const summary = document.querySelector<HTMLElement>(".dt-pages summary")!;
+  const summary = document.querySelector<HTMLElement>(".dt-pages-name")!;
   const active = document.querySelector<HTMLElement>(".dt-pages a[aria-current]");
   const t = document.title.split("—").pop()?.trim();
   // .dt-menu-label, not the whole row: the row also holds the route in an <em>
@@ -437,7 +437,6 @@ export function run(cfg: MitkaConfig) {
       : "";
 
   const TRASH = `<svg viewBox="0 0 20 20" width="13" height="13" aria-hidden="true"><path d="M4 6h12M8 6V4.2h4V6M6.6 6l.55 9.8h5.7L13.4 6"/></svg>`;
-  const COPY = `<svg viewBox="0 0 20 20" width="13" height="13" aria-hidden="true"><rect x="7" y="7" width="9.5" height="9.5" rx="1.6"/><path d="M13 4.6a1.6 1.6 0 0 0-1.6-1.6H5a1.6 1.6 0 0 0-1.6 1.6v6.4A1.6 1.6 0 0 0 5 13"/></svg>`;
   /* The tick and the cross were text glyphs — a ✓ and a ✕ sit on a baseline and carry
      the font's own weight, so they never lined up with the drawn icons beside them.
      Same viewBox, same 13px, same stroke as the rest. */
@@ -574,7 +573,6 @@ export function run(cfg: MitkaConfig) {
                   done ? "Reopen" : st === "claude" ? "Looks right \u2014 mark it resolved" : "Resolve"
                 }">${TICK}</button>
               <i class="dt-note-sep"></i>
-              <button data-act="copy" data-id="${c.id}" title="Copy this thread as a prompt">${COPY}</button>
               <button data-act="rm" data-id="${c.id}" title="Delete this thread">${TRASH}</button>
               <button data-act="close" data-id="${c.id}" title="Close">${CROSS}</button>
             </span>
@@ -728,7 +726,6 @@ export function run(cfg: MitkaConfig) {
            ><svg viewBox="0 0 20 20" width="13" height="13" aria-hidden="true">${hereIcon?.icon ?? ""}</svg></span>
          <span class="dt-hist-title">Comments</span>
          ${bandChips}
-         <button class="dt-hist-copy" data-copy aria-label="Copy the open comments as a prompt for Claude">${COPY}</button>
          <button class="dt-hist-refresh" data-refresh aria-label="Reload comments from the file">
            <svg viewBox="0 0 20 20" width="13" height="13" aria-hidden="true"><path d="M16 10a6 6 0 1 1-1.8-4.3"/><path d="M16.3 3.4v3.4h-3.4"/></svg>
          </button>
@@ -744,98 +741,6 @@ export function run(cfg: MitkaConfig) {
             ? "Everything here is resolved."
             : "No comments at this breakpoint yet. Click anything on the page to leave one."}</p>`);
   };
-
-  /* The queue, as text you can paste into a session. Everything I would need to act
-     without asking: which page and band, which element, what was said in the thread,
-     and the repo path of every screenshot — a data URL would be useless to me, a path
-     I can open. Ends with how to hand the work back, because marking a thread is what
-     turns this list into a shorter one next time. */
-  const bandOfNote = (c: Note) => c.breakpoint || "desktop";
-  const groupKey = (c: Note) => `${c.route ?? ROUTE}|${bandOfNote(c)}`;
-
-  /* Numbered per page and band, the way the panel and the CLI both number them, so
-     "#3 on tablet" means the same thing in all three places. Counted over the pool,
-     not the selection: skipping a resolved thread must not renumber the rest. */
-  const numbering = (pool: Note[]) => {
-    const seq = new Map<number, number>();
-    const counts: Record<string, number> = {};
-    for (const n of pool) seq.set(n.id, (counts[groupKey(n)] = (counts[groupKey(n)] || 0) + 1));
-    return seq;
-  };
-
-  const one = (c: Note, seq: Map<number, number>) => [
-    `#${seq.get(c.id) ?? "?"} (id ${c.id}) [${categoryOf(c.category).id}] on ${elName(c.tag, c.classes)}${
-      c.browser ? ` \u2014 ${c.browser}` : ""}`,
-    c.label ? `  quoted: "${clean(c.label)}"` : "",
-    `  ${c.text.replace(/\n/g, "\n  ")}`,
-    ...(c.note ? [`  me: ${c.note}`] : []),
-    ...(c.replies ?? []).map((r) => `  ${r.author === "claude" ? "me" : "you"}: ${r.text}`),
-    ...(c.images ?? []).map((path) => `  screenshot: ${path}`),
-  ].filter(Boolean).join("\n");
-
-  /* Everything I would need to act without asking: which page and band, which element,
-     what was said in the thread, and the repo path of every screenshot — a data URL
-     would be useless to me, a path I can open. Grouped by page and band because that is
-     the order the work gets done in: one route open at one width at a time.
-     `pool` is what the numbers are counted over, `waiting` is the tail note. */
-  const promptFor = (list: Note[], pool: Note[] = notes, waiting = 0) => {
-    const seq = numbering(pool);
-    const groups = new Map<string, Note[]>();
-    for (const c of list) groups.set(groupKey(c), [...(groups.get(groupKey(c)) ?? []), c]);
-    const routes = new Set(list.map((c) => c.route ?? ROUTE));
-    const head = routes.size > 1
-      ? `Open page comments \u2014 ${list.length} across ${routes.size} pages.`
-      : `Open page comments on ${[...routes][0]} (${list.length}).`;
-    const body = [...groups].map(([key, group]) => {
-      const [route, bp] = key.split("|");
-      return `## ${route} \u2014 ${BREAKPOINTS.find((x) => x.id === bp)?.label ?? bp}\n\n` +
-        group.map((c) => one(c, seq)).join("\n\n");
-    }).join("\n\n");
-    return `${head}\n` +
-      `Work through them, then mark each one with \`npx mitka done <id> "what you did"\`.\n` +
-      `That marks it done by you and leaves the thread open for me to confirm.\n\n${body}\n` +
-      (waiting ? `\n(${waiting} more ${waiting === 1 ? "thread was" : "threads were"} resolved by me` +
-        ` and are waiting to be checked \u2014 not listed.)\n` : "");
-  };
-
-  const copyPrompt = async (btn: HTMLElement, list: Note[], pool: Note[] = notes, waiting = 0) => {
-    if (!list.length) return;
-    try {
-      await navigator.clipboard.writeText(promptFor(list, pool, waiting));
-    } catch {
-      return; // no clipboard permission: the button simply does not flash
-    }
-    btn.dataset.copied = "1";
-    setTimeout(() => delete btn.dataset.copied, 1200);
-  };
-
-  /* The whole queue, every page and every band, as one paste into a session — the thing
-     you would otherwise type by hand before every working session. Reads the file
-     directly rather than the loaded page's slice, which only ever holds this route.
-     Open threads only: the ones I have already marked are waiting on your eyes, not on
-     more work, so they are counted in a tail line instead of re-handed to me. */
-  const copyAllBtn = document.querySelector<HTMLButtonElement>(".dt-copy-btn")!;
-  copyAllBtn.addEventListener("click", async () => {
-    let all: Note[] = [];
-    try {
-      all = (await (await fetch("/__devbar/comments")).json()).comments ?? [];
-    } catch {
-      toast("Could not read the comments file.");
-      return;
-    }
-    const queue = all.filter((n) => stateOf(n) === "open");
-    const waiting = all.filter((n) => stateOf(n) === "claude").length;
-    if (!queue.length) {
-      toast(waiting ? `Nothing open \u2014 ${waiting} resolved by Claude, waiting to be checked.` : "Nothing open anywhere.");
-      return;
-    }
-    await copyPrompt(copyAllBtn, queue, all, waiting);
-    /* The toolbar draws its own tooltip through data-tip, so the ::after trick the panel
-       button uses would collide with it. Saying it in the tooltip is better anyway: the
-       cursor is still on the button you just clicked. */
-    copyAllBtn.dataset.tip = `Copied ${queue.length} comment${queue.length === 1 ? "" : "s"}`;
-    setTimeout(() => { copyAllBtn.dataset.tip = "Copy the whole queue"; }, 1600);
-  });
 
   /* Collapsed keeps the head — the band it is filtered to and the way back — rather
      than hiding outright: the toolbar button already does "gone". */
@@ -855,16 +760,6 @@ export function run(cfg: MitkaConfig) {
       refresh.dataset.spin = "1";
       await syncNotes();
       setTimeout(() => delete refresh.dataset.spin, 500);
-      return;
-    }
-    const copy = (e.target as Element).closest<HTMLElement>("[data-copy]");
-    if (copy) {
-      /* This page and this band only — the toolbar button next to the pin icon is the
-         one that takes every page. Open threads only: a prompt is a to-do list. */
-      const bp = activeBp();
-      const here = notes.filter((n) => (n.breakpoint || "desktop") === bp);
-      await copyPrompt(copy, here.filter((n) => stateOf(n) === "open"), notes,
-        here.filter((n) => stateOf(n) === "claude").length);
       return;
     }
     if ((e.target as Element).closest("[data-fold]")) {
@@ -1184,11 +1079,6 @@ export function run(cfg: MitkaConfig) {
       await syncNotes();
       return;
     }
-    if (act === "copy") {
-      const c = notes.find((n) => n.id === id);
-      if (c) await copyPrompt(btn, [c]);
-      return;
-    }
     if (act === "cancel") { draft = null; renderNotes(); return; }
     if (act === "close") { openId = null; renderNotes(); return; }
     /* On a draft the tag is not written anywhere yet, so it is a local edit; on a
@@ -1265,7 +1155,7 @@ export function run(cfg: MitkaConfig) {
     if (typeof m.open === "number") goTo(m.open);
     if (typeof m.grid === "boolean" && m.grid === overlay.hidden) setGrid(m.grid);
     if (typeof m.inspect === "string" && m.inspect !== inspect) setInspect(m.inspect);
-    if (m.reload) loadNotes();
+    if (m.reload) { loadNotes(); loadAllNotes(); }
   });
 
   /* Re-read the file and tell the other document to do the same — the canvas is a
@@ -1564,4 +1454,14 @@ export function run(cfg: MitkaConfig) {
   if (notesOn && localStorage.getItem("dt-history") !== "0") setHistory(true);
   if (!notesOn) loadNotes(); // badge shows the open count even with the mode off
   loadAllNotes(); // the page menu carries its counts whether or not the mode is on
+
+  /* `npx mitka done` writes the same file from the terminal, and nothing tells the open
+     page about it — the counts sat at what they were when the tab loaded until someone
+     hit refresh in the panel. Coming back to the tab is exactly when they are read, so
+     that is when they are re-fetched. */
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) return;
+    loadAllNotes();
+    loadNotes();
+  });
 }

@@ -39,19 +39,15 @@ export function mount(cfg: MitkaConfig) {
   const handleTip = "Drag to resize inside this breakpoint. Double-click snaps to the band's edge";
 
   document.body.insertAdjacentHTML("beforeend", `
-<!-- One bar, bottom-centre: pages · devices | inspectors | comments | breakpoints. -->
+<!-- One bar, bottom-centre: pages | inspectors | comments | breakpoints · devices. -->
 <div class="devtools">
   <div class="dt-group dt-group--menus">
     <details class="dt-pages" name="dt-menu">
-      <summary aria-label="Pages" title="Pages">${esc(current)}</summary>
-      <ul>${pages}</ul>
-    </details>
-    <details class="dt-devices" name="dt-menu">
-      <summary title="Devices">
-        ${icon('<rect x="3" y="4" width="14" height="9" rx="1.5" /><path d="M7 16h6" />')}
-        <span class="dt-devices-name">Device</span>
+      <summary aria-label="Pages" title="Pages">
+        ${icon('<rect x="4.5" y="2.5" width="11" height="15" rx="1.5" /><path d="M7.5 6.6h5M7.5 10h5M7.5 13.4h3" />')}
+        <span class="dt-pages-name">${esc(current)}</span>
       </summary>
-      <div class="dt-devices-menu">${devices}</div>
+      <ul>${pages}</ul>
     </details>
   </div>
 
@@ -78,9 +74,6 @@ export function mount(cfg: MitkaConfig) {
       ${icon('<path d="M4 3.5h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H9.5L5.5 16.5v-3H4a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2z" stroke-linejoin="round" />')}
       <span class="dt-notes-count" hidden></span>
     </button>
-    <button class="dt-icon dt-copy-btn" type="button" title="Copy the whole queue">
-      ${icon('<rect x="7.5" y="7.5" width="9" height="9" rx="1.6" /><path d="M12.5 5.1A1.6 1.6 0 0 0 10.9 3.5H5.1a1.6 1.6 0 0 0-1.6 1.6v5.8a1.6 1.6 0 0 0 1.6 1.6" />')}
-    </button>
     <button class="dt-icon dt-history-btn" type="button" aria-pressed="false" title="Panel">
       ${icon('<rect x="2.5" y="3.5" width="15" height="13" rx="2" /><path d="M12 3.5v13M14 7.5h1.5M14 10h1.5" />')}
     </button>
@@ -90,6 +83,16 @@ export function mount(cfg: MitkaConfig) {
   </div>
 
   <div class="dt-group dt-bps" role="group" aria-label="Breakpoint">${bps}</div>
+
+  <div class="dt-group dt-group--menus">
+    <details class="dt-devices" name="dt-menu">
+      <summary title="Devices">
+        ${icon('<rect x="3" y="4" width="14" height="9" rx="1.5" /><path d="M7 16h6" />')}
+        <span class="dt-devices-name">Device</span>
+      </summary>
+      <div class="dt-devices-menu">${devices}</div>
+    </details>
+  </div>
 </div>
 
 <div class="dt-frame" hidden aria-hidden="true">

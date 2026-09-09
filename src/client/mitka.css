@@ -86,7 +86,8 @@
   /* global.css has `svg { height: auto; max-width: 100% }`, which collapses an icon
      sized only by its width/height attributes — so the size is set here. */
   .dt-icon svg,
-  .dt-devices summary svg {
+  .dt-devices summary svg,
+  .dt-pages summary svg {
     flex: none;
     /* global.css declares `svg { max-width: 100%; height: auto }` for content images.
        On chrome icons that cap resolved against a collapsed containing block and
@@ -566,7 +567,8 @@
   .dt-pages summary::-webkit-details-marker {
     display: none;
   }
-  .dt-devices summary svg {
+  .dt-devices summary svg,
+  .dt-pages summary svg {
     fill: none;
     stroke: currentColor;
     stroke-width: 1.5;
@@ -746,7 +748,8 @@
   .dt-pages summary::-webkit-details-marker {
     display: none;
   }
-  .dt-devices summary svg {
+  .dt-devices summary svg,
+  .dt-pages summary svg {
     fill: none;
     stroke: currentColor;
     stroke-width: 1.5;
@@ -1426,7 +1429,6 @@
     padding: 10px 12px;
     border-bottom: 1px solid rgb(255 255 255 / 0.08);
   }
-  .dt-hist-copy,
   .dt-hist-refresh,
   .dt-hist-fold {
     display: grid;
@@ -1440,28 +1442,9 @@
     color: #8e8e93;
     cursor: pointer;
   }
-  .dt-hist-copy {
-    margin-left: auto; /* the trio sits at the right end of the head */
+  .dt-hist-refresh {
+    margin-left: auto; /* the pair sits at the right end of the head */
   }
-  /* The copy is silent and instant, so the button has to say it happened; the word
-     replaces the icon for a moment rather than sitting beside it. */
-  .dt-hist-copy[data-copied],
-  .dt-note-tools button[data-copied] {
-    position: relative;
-    background: #2c2c2e;
-  }
-  .dt-hist-copy[data-copied]::after,
-  .dt-note-tools button[data-copied]::after {
-    content: "Copied";
-    position: absolute;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    background: inherit;
-    color: #22c58b;
-    font: 600 9px/1 ui-sans-serif, system-ui, sans-serif;
-  }
-  .dt-hist-copy:hover,
   .dt-hist-refresh:hover,
   .dt-hist-fold:hover {
     background: rgb(255 255 255 / 0.08);
@@ -1473,7 +1456,6 @@
   @keyframes dt-spin {
     to { transform: rotate(360deg); }
   }
-  .dt-hist-copy svg,
   .dt-hist-refresh svg,
   .dt-hist-fold svg {
     display: block;
