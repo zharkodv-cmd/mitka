@@ -814,6 +814,7 @@ export function run(cfg: MitkaConfig) {
     resolvedBtn.setAttribute("aria-pressed", String(showResolved));
     localStorage.setItem("dt-resolved", showResolved ? "1" : "0");
     renderNotes();
+    loadAllNotes(); // the eye hides resolved threads in the page menu too
   });
   resolvedBtn.setAttribute("aria-pressed", String(showResolved));
 
@@ -837,21 +838,29 @@ export function run(cfg: MitkaConfig) {
   });
   const sizer = new ResizeObserver(() => reposition());
 
-  /* The menu counts every page, not this one, so it needs the whole file. Two numbers:
-     what nobody has looked at, and what I closed and you have not checked. Resolved is
-     left out — a page whose work is finished should read as empty from the menu. */
+  /* The menu counts every page, not this one, so it needs the whole file. Three numbers:
+     what nobody has looked at, what I closed and you have not checked, and what is
+     signed off. Resolved used to be dropped here, which read as "no comments on this
+     page" on twenty pages that in fact carry the whole history — so it rides along under
+     the same eye the panel uses, in a quieter green: done is context, not a to-do. */
   const paintPageCounts = (all: Note[]) => {
-    type Count = { open: number; claude: number };
+    type Count = { open: number; claude: number; done: number };
+    const zero = (): Count => ({ open: 0, claude: 0, done: 0 });
     const tally: Record<string, Count & { bands: Record<string, Count> }> = {};
     for (const c of all) {
       const st = stateOf(c);
-      if (st === "done") continue;
-      const t = (tally[c.route ?? ""] ??= { open: 0, claude: 0, bands: {} });
-      t[st === "claude" ? "claude" : "open"]++;
+      const t = (tally[c.route ?? ""] ??= { ...zero(), bands: {} });
+      t[st]++;
       const bp = c.breakpoint || "desktop";
-      const band = (t.bands[bp] ??= { open: 0, claude: 0 });
-      band[st === "claude" ? "claude" : "open"]++;
+      (t.bands[bp] ??= zero())[st]++;
     }
+    /* A chip is one state, so the number never mixes them: what is still to do while
+       anything is, and the resolved count only once nothing is. A blue 29 on a band
+       holding one open thread and 28 finished ones says the wrong thing entirely.
+       What the eye is hiding does not count: a page whose only threads are resolved
+       goes back to reading as empty the moment you switch it off. */
+    const shownOf = (c: Count) =>
+      c.open + c.claude || (showResolved ? c.done : 0);
     for (const link of document.querySelectorAll<HTMLAnchorElement>(".dt-pages a")) {
       const n = link.querySelector<HTMLElement>(".dt-pages-n");
       if (!n) continue;
@@ -859,22 +868,29 @@ export function run(cfg: MitkaConfig) {
       for (const bp of BREAKPOINTS) {
         const chip = n.querySelector<HTMLElement>(`[data-bp="${bp.id}"]`)!;
         const band = t?.bands[bp.id];
-        chip.hidden = !band;
-        if (!band) continue;
-        chip.querySelector("i")!.textContent = String(band.open + band.claude);
+        const shown = band ? shownOf(band) : 0;
+        chip.hidden = !shown;
+        if (!band || !shown) continue;
+        chip.querySelector("i")!.textContent = String(shown);
         /* Blue the moment anything on that band is untouched: what nobody has looked
-           at outranks what is merely waiting to be checked. */
-        chip.dataset.state = band.open ? "open" : "claude";
-        chip.title = `${bp.label}: ${band.open} open \u00b7 ${band.claude} to check`;
+           at outranks what is merely waiting to be checked, which outranks what is
+           already signed off. */
+        chip.dataset.state = band.open ? "open" : band.claude ? "claude" : "done";
+        chip.title = `${bp.label}: ${band.open} open \u00b7 ${band.claude} to check` +
+          ` \u00b7 ${band.done} resolved`;
       }
-      n.hidden = !t;
+      const total = t ? shownOf(t) : 0;
+      n.hidden = !total;
       /* Which band they are on, or a page counting three shows an empty screen when
          all three were written on a phone. */
       const bands = t
-        ? BREAKPOINTS.filter((x) => t.bands[x.id])
-            .map((x) => `${x.label} ${t.bands[x.id].open + t.bands[x.id].claude}`).join(" \u00b7 ")
+        ? BREAKPOINTS.filter((x) => t.bands[x.id] && shownOf(t.bands[x.id]))
+            .map((x) => `${x.label} ${shownOf(t.bands[x.id])}`).join(" \u00b7 ")
         : "";
-      n.title = t ? `${t.open} open \u00b7 ${t.claude} resolved by Claude, to check\n${bands}` : "";
+      n.title = total
+        ? `${t.open} open \u00b7 ${t.claude} resolved by Claude, to check` +
+          ` \u00b7 ${t.done} resolved\n${bands}`
+        : "";
     }
   };
 

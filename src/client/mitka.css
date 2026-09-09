@@ -678,6 +678,13 @@
     background: #d97757;
     color: #fff;
   }
+  /* Signed off, so it is history rather than work: the green is stated in the text on a
+     tinted pill instead of a solid one. Twenty pages of solid green outshouted the two
+     that still hold something, which is the one thing this row exists to show. */
+  .dt-pages-n b[data-state="done"] {
+    background: rgb(34 160 107 / 0.18);
+    color: #4cc38a;
+  }
   /* A long label is clipped rather than pushing the device size off the row. Pages
      have the whole row to themselves now, so nothing there clips. */
   .dt-menu-label {
