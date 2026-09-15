@@ -333,6 +333,27 @@ export function run(cfg: MitkaConfig) {
      notes while the window stays where it is. Comments are always filed under the
      breakpoint the window is actually at, so a pin never lies about what was seen. */
   let bpFilter: string | null = null;
+  /* A half-typed comment is work. It lived in `draft` alone, so an HMR reload — or the
+     stray refresh that follows one — took the sentence with it. Kept per route: the
+     draft belongs to the page it points at, and two tabs on two pages never fight. */
+  const DRAFT_KEY = `dt-draft:${ROUTE}`;
+  let draftSave = 0;
+  const writeDraft = () => {
+    if (!draft && !replyDraft) { localStorage.removeItem(DRAFT_KEY); return; }
+    const body = { draft, reply: replyDraft ? { for: replyFor, text: replyDraft } : null };
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(body)); } catch {
+      /* A pasted screenshot is a data URL of megabytes and the ~5 MB store refuses the
+         lot. The sentence is the half worth keeping; the image is still on the clipboard. */
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(
+          { ...body, draft: draft && { ...draft, image: undefined } }));
+      } catch { /* nothing to be done: keep typing, the file is still the record */ }
+    }
+  };
+  /* Debounced because it runs on every keystroke and every render; flushed on the way
+     out, or a reload inside the window would lose exactly what this exists to keep. */
+  const keepDraft = () => { clearTimeout(draftSave); draftSave = setTimeout(writeDraft, 200); };
+  addEventListener("pagehide", () => { clearTimeout(draftSave); writeDraft(); });
   /* One switch for resolved threads: it governs both their dimmed marks on the page
      and their rows in the panel. Default on — a resolved thread you cannot see is a
      decision you cannot revisit. */
@@ -521,6 +542,7 @@ export function run(cfg: MitkaConfig) {
   };
 
   const renderNotes = () => {
+    keepDraft();
     syncBpButtons();
     if (openId !== replyFor) { replyDraft = ""; replyFor = openId; }
     const bp0 = activeBp();
@@ -743,13 +765,10 @@ export function run(cfg: MitkaConfig) {
   };
 
   /* Collapsed keeps the head — the band it is filtered to and the way back — rather
-     than hiding outright: the toolbar button already does "gone". */
-  const FOLD_KEY = "dt-hist-fold";
-  const setFold = (on: boolean) => {
-    history.toggleAttribute("data-collapsed", on);
-    localStorage.setItem(FOLD_KEY, on ? "1" : "0");
-  };
-  setFold(localStorage.getItem(FOLD_KEY) === "1");
+     than hiding outright: the toolbar button already does "gone". It is a gesture for
+     the moment you need the page clear, not a setting: it was remembered, so a panel
+     collapsed once opened collapsed ever after, which reads as a panel that is broken. */
+  const setFold = (on: boolean) => history.toggleAttribute("data-collapsed", on);
 
   history.addEventListener("click", async (e) => {
     const refresh = (e.target as Element).closest<HTMLElement>("[data-refresh]");
@@ -760,6 +779,13 @@ export function run(cfg: MitkaConfig) {
       refresh.dataset.spin = "1";
       await syncNotes();
       setTimeout(() => delete refresh.dataset.spin, 500);
+      return;
+    }
+    /* Collapsed, the whole head opens it: the chevron is a 13px target, and the thing
+       you press is "the panel". Expanded, only the chevron closes it — the head carries
+       the band buttons. */
+    if (history.hasAttribute("data-collapsed") && (e.target as Element).closest(".dt-hist-head")) {
+      setFold(false);
       return;
     }
     if ((e.target as Element).closest("[data-fold]")) {
@@ -821,6 +847,7 @@ export function run(cfg: MitkaConfig) {
   historyBtn.addEventListener("click", () => {
     // opening the list is also the plainest way into comment mode
     if (history.hidden && !notesOn) setNotes(true);
+    if (history.hidden) setFold(false); // asking for the panel means asking to read it
     setHistory(history.hidden === true);
   });
 
@@ -1057,6 +1084,7 @@ export function run(cfg: MitkaConfig) {
     if (!box) return;
     if (box.classList.contains("dt-note-input")) { if (draft) draft.text = box.value; }
     else replyDraft = box.value;
+    keepDraft();
     /* Blue the moment there is something to send, grey while the box is empty — the
        one place the card says whether Enter will do anything. */
     box.closest(".dt-note")?.querySelector(".dt-send")
@@ -1468,6 +1496,23 @@ export function run(cfg: MitkaConfig) {
   // after setNotes: the panel only exists while the mode is on
   // the panel is the point of the mode, so it opens with it unless you closed it
   if (notesOn && localStorage.getItem("dt-history") !== "0") setHistory(true);
+  /* Whatever was half-written when the page went away. The pin is redrawn from its
+     selector like any saved comment's, so a draft survives HMR the same way sent ones
+     do; an element that no longer exists takes its draft with it. */
+  try {
+    const saved = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
+    if (saved?.draft && document.querySelector(saved.draft.selector)) {
+      draft = saved.draft;
+      if (!notesOn) setNotes(true); // the sentence is unreachable with the mode off
+    }
+    if (saved?.reply?.text) {
+      replyDraft = saved.reply.text;
+      // openId last: renderNotes drops the reply when it belongs to another thread
+      replyFor = openId = saved.reply.for ?? null;
+    }
+    if (draft || replyDraft) renderNotes();
+  } catch { localStorage.removeItem(DRAFT_KEY); }
+
   if (!notesOn) loadNotes(); // badge shows the open count even with the mode off
   loadAllNotes(); // the page menu carries its counts whether or not the mode is on
 
