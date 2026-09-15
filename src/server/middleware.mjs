@@ -35,7 +35,11 @@ const titleOf = (root, entrypoint) => {
 export function buildConfig({ root, options, routes }) {
   const groups = options.groups ?? ['Pages'];
   const named = options.pages ?? {};
-  const pages = routes
+  const row = (route, name, group) => ({
+    // "1.1.1.D. Homepage" is sorted by its number and read without it
+    route, name, label: name.replace(/^[\d.]+[A-Z]?\.\s*/, ''), group,
+  });
+  const discovered = routes
     // A dynamic route has no address to visit — /blog/[slug] only ever resolved to
     // /blog, which is already a row of its own. Injected routes (a CMS studio) and
     // Astro's own 404/500 are not pages of the site either.
@@ -43,9 +47,17 @@ export function buildConfig({ root, options, routes }) {
     .map((r) => {
       const route = r.pattern.replace(/\/+$/, '') || '/';
       const [name, group] = named[route] ?? [titleOf(root, r.entrypoint) ?? route, groups[groups.length - 1]];
-      // "1.1.1.D. Homepage" is sorted by its number and read without it
-      return { route, name, label: name.replace(/^[\d.]+[A-Z]?\.\s*/, ''), group };
-    })
+      return row(route, name, group);
+    });
+  // An address a dynamic route serves — /locations/san-diego out of
+  // /locations/[campus] — cannot be discovered: Astro knows the pattern, only the
+  // project knows which slugs exist. Naming one in `pages` is how it says so, and
+  // those are the rows that would otherwise be missing from the menu entirely.
+  const seen = new Set(discovered.map((p) => p.route));
+  const declared = Object.entries(named)
+    .filter(([route]) => !seen.has(route))
+    .map(([route, [name, group]]) => row(route, name, group ?? groups[groups.length - 1]));
+  const pages = [...discovered, ...declared]
     .sort((a, b) =>
       groups.indexOf(a.group) - groups.indexOf(b.group) ||
       figmaOrder(a.name) - figmaOrder(b.name) ||
