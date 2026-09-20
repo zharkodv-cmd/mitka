@@ -72,11 +72,18 @@ npx mitka done <id> "..."     resolve as Claude + note (stays highlighted until 
 npx mitka note <id> "..."     reply without changing status
 npx mitka reopen <id>
 npx mitka rm <id>             delete the thread and its screenshots
+npx mitka prune [--dry]       move every resolved thread to feedback/archive/
 npx mitka digest              compact open list (SessionStart hook)
 npx mitka count               one line (UserPromptSubmit hook)
 ```
 
 The root is the nearest directory with a `package.json` above the cwd, or `--root <dir>`.
+
+`prune` is for a store that has grown past being readable: resolved threads and their
+screenshots move to `feedback/archive/comments-<date>.json` and
+`feedback/archive/images/`, and the file keeps a `nextId` floor so the next comment
+carries on from where the numbering was rather than restarting at #1. Nothing is deleted
+— `--dry` says what would move. Open threads never move.
 
 Claude Code hooks (`.claude/settings.json`):
 

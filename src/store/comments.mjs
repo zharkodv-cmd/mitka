@@ -5,15 +5,21 @@
 // and feedback/images/ for pasted screenshots. Both the dev middleware and the CLI
 // open the store the same way, so a thread can never be written under one path and
 // read under another.
-import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { categoryOf } from './categories.mjs';
 
 export { CATEGORIES, categoryOf } from './categories.mjs';
 export { stateOf, STATE_LABEL } from './status.mjs';
 
-/** Ids never reuse a slot, so a pin number stays the same for the life of the file. */
-export const nextId = (db) => db.comments.reduce((m, c) => Math.max(m, c.id), 0) + 1;
+/**
+ * Ids never reuse a slot, so a pin number stays the same for the life of the file — and
+ * `prune` leaves `nextId` behind as a floor, so numbering survives the threads it moved
+ * out. Without it the first comment after a prune would be #1 again, colliding with
+ * every "user id N" a source comment cites.
+ */
+export const nextId = (db) =>
+  Math.max(db.nextId || 0, db.comments.reduce((m, c) => Math.max(m, c.id), 0) + 1);
 
 export function add(db, { route, selector, rx, ry, text, label, viewport, breakpoint, browser, tag, classes, nth, category }) {
   const c = {
@@ -63,6 +69,9 @@ export function patch(db, id, changes) {
 export function createStore(root) {
   const file = join(root, 'feedback', 'comments.json');
   const imageDir = join(root, 'feedback', 'images');
+  // where `prune` puts resolved threads and their screenshots
+  const archiveDir = join(root, 'feedback', 'archive');
+  const archiveImageDir = join(archiveDir, 'images');
   const rel = (name) => `feedback/images/${name}`;
 
   const load = () => (existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : { comments: [] });
@@ -107,6 +116,41 @@ export function createStore(root) {
    * the CLI and the middleware delete, and an orphaned image is a file nothing will
    * ever point at again. Returns false if there was no such comment.
    */
+  /**
+   * Move every resolved thread out of the live store into
+   * feedback/archive/comments-<date>.json, screenshots included, and leave `nextId`
+   * behind so the numbering carries on. Nothing is deleted: the archive file is the
+   * same records, and each image keeps a valid path into feedback/archive/images/.
+   * `dry` answers "what would go" without writing anything.
+   */
+  const prune = (db, { dry = false, date = new Date().toISOString().slice(0, 10) } = {}) => {
+    const moving = db.comments.filter((c) => c.status === 'done');
+    const keeping = db.comments.filter((c) => c.status !== 'done');
+    const archiveFile = join(archiveDir, `comments-${date}.json`);
+    if (dry || !moving.length) return { moving, keeping, archiveFile, images: moving.flatMap((c) => c.images || []) };
+
+    mkdirSync(archiveImageDir, { recursive: true });
+    const images = [];
+    for (const c of moving) {
+      c.images = (c.images || []).map((path) => {
+        const name = path.split('/').pop();
+        const from = join(imageDir, name);
+        const to = join(archiveImageDir, name);
+        if (existsSync(from)) renameSync(from, to);
+        images.push(name);
+        return `feedback/archive/images/${name}`;
+      });
+    }
+    // Append, so pruning twice on one day does not drop the earlier run.
+    const previous = existsSync(archiveFile) ? JSON.parse(readFileSync(archiveFile, 'utf8')).comments || [] : [];
+    const seen = new Set(previous.map((c) => c.id));
+    writeFileSync(archiveFile, JSON.stringify({ comments: [...previous, ...moving.filter((c) => !seen.has(c.id))] }, null, 2) + '\n');
+
+    db.nextId = nextId(db);
+    db.comments = keeping;
+    return { moving, keeping, archiveFile, images };
+  };
+
   const remove = (db, id) => {
     const c = db.comments.find((x) => x.id === Number(id));
     if (!c) return false;
@@ -115,5 +159,5 @@ export function createStore(root) {
     return true;
   };
 
-  return { root, file, imageDir, load, save, attach, detach, remove, add, patch, reply, nextId };
+  return { root, file, imageDir, archiveDir, archiveImageDir, load, save, attach, detach, remove, add, patch, reply, nextId, prune };
 }

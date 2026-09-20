@@ -8,13 +8,14 @@
 //   mitka reply 3 "..."        same thing, clearer name
 //   mitka reopen 3
 //   mitka rm 3
+//   mitka prune [--dry]        move resolved threads to feedback/archive/, keep numbering
 //   mitka digest               compact list for the SessionStart hook
 //   mitka count                one line for the UserPromptSubmit hook
 //   mitka --selftest
 //
 // Root is the nearest directory with a package.json above the cwd, or `--root <dir>`.
 // The store is <root>/feedback/comments.json.
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -86,6 +87,29 @@ if (cmd === '--selftest') {
   assert.equal(s.remove(t, 99), false, 'removing a missing id reports rather than throws');
   s.save(t);
   assert.equal(s.load().comments.length, t.comments.length, 'save then load round-trips');
+  // prune: resolved threads leave, open ones stay, numbering carries on
+  const dir2 = await mkdtemp(join(tmpdir(), 'mitka-prune-'));
+  const s2 = createStore(dir2);
+  const t2 = { comments: [] };
+  add(t2, { route: '/', selector: 'h1', rx: 0, ry: 0, text: 'closed' });
+  const open2 = add(t2, { route: '/', selector: 'h2', rx: 0, ry: 0, text: 'still open' });
+  patch(t2, 1, { status: 'done', doneBy: 'you' });
+  const shot = s2.attach(t2, 1, 'data:image/png;base64,iVBORw0KGgo=');
+  const floor = nextId(t2);
+  const dryRun = s2.prune(t2, { dry: true, date: '2026-01-01' });
+  assert.equal(dryRun.moving.length, 1, 'a dry run reports what would move');
+  assert.equal(t2.comments.length, 2, 'and moves nothing');
+  const moved = s2.prune(t2, { date: '2026-01-01' });
+  assert.equal(moved.moving.length, 1, 'only the resolved thread moves');
+  assert.deepEqual(t2.comments.map((c) => c.id), [open2.id], 'the open one stays');
+  assert.equal(nextId(t2), floor, 'the id floor survives the threads that left');
+  assert.ok(existsSync(join(dir2, 'feedback/archive/comments-2026-01-01.json')), 'the archive file is written');
+  assert.ok(existsSync(join(dir2, 'feedback/archive/images', shot.split('/').pop())), 'screenshots move with it');
+  assert.ok(!existsSync(join(dir2, shot)), 'and leave the live image dir');
+  assert.match(moved.moving[0].images[0], /^feedback\/archive\/images\//, 'the archived record points at the new path');
+  s2.prune(t2, { date: '2026-01-01' });
+  assert.equal(JSON.parse(readFileSync(join(dir2, 'feedback/archive/comments-2026-01-01.json'), 'utf8')).comments.length, 1, 'pruning twice in a day does not double the archive');
+  await rm(dir2, { recursive: true, force: true });
   await rm(dir, { recursive: true, force: true });
   console.log('mitka selftest ok');
   process.exit(0);
@@ -120,6 +144,25 @@ if (['done', 'note', 'reopen', 'rm'].includes(cmd)) {
   if (!c) { console.error(`No comment #${id}`); process.exit(1); }
   store.save(db);
   console.log(`#${c.id} ${stateOf(c)}${text ? ` — ${text}` : ''}`);
+  process.exit(0);
+}
+
+/* The store is meant to be small and readable: a year of answered threads makes both the
+   panel's archive and this list a wall. Prune moves them to feedback/archive/ — the same
+   records, screenshots and all — and leaves the id floor behind, so the next comment is
+   #552 and not #1. Nothing is deleted. */
+if (cmd === 'prune') {
+  const dry = argv.includes('--dry');
+  const { moving, keeping, archiveFile, images } = store.prune(db, { dry });
+  if (!moving.length) { console.log('Nothing resolved to move.'); process.exit(0); }
+  const rel = archiveFile.replace(store.root + '/', '');
+  if (dry) {
+    console.log(`Would move ${moving.length} resolved thread${moving.length === 1 ? '' : 's'} (${images.length} screenshot${images.length === 1 ? '' : 's'}) to ${rel}; ${keeping.length} would stay.`);
+    process.exit(0);
+  }
+  store.save(db);
+  console.log(`Moved ${moving.length} resolved thread${moving.length === 1 ? '' : 's'} and ${images.length} screenshot${images.length === 1 ? '' : 's'} to ${rel}.`);
+  console.log(`${keeping.length} left in the store; the next comment will be #${db.nextId}.`);
   process.exit(0);
 }
 
