@@ -43,6 +43,10 @@ touches nothing else. `npx mitka init --yes` takes every default.
 Without `init`, `integrations: [mitka()]` in `astro.config.mjs` is enough: four default
 breakpoints, pages grouped by folder.
 
+After upgrading, stop and start `astro dev`. Astro's own restart (on a config change)
+runs in the same Node process, which keeps the old server half of the bar loaded while
+the browser half is already new.
+
 ## Using the bar
 
 | Control | |
