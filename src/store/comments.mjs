@@ -21,7 +21,7 @@ export { stateOf, STATE_LABEL } from './status.mjs';
 export const nextId = (db) =>
   Math.max(db.nextId || 0, db.comments.reduce((m, c) => Math.max(m, c.id), 0) + 1);
 
-export function add(db, { route, selector, rx, ry, text, label, viewport, breakpoint, browser, tag, classes, nth, category }) {
+export function add(db, { route, selector, rx, ry, text, label, viewport, breakpoint, browser, device, tag, classes, nth, category }) {
   const c = {
     id: nextId(db), route, selector, rx, ry, text,
     // Fallbacks for when the selector path stops matching: the pin re-finds its
@@ -32,6 +32,8 @@ export function add(db, { route, selector, rx, ry, text, label, viewport, breakp
     breakpoint: breakpoint || 'desktop',
     // which browser it was seen in — a rendering bug is rarely all of them
     browser: browser || '',
+    // the preview device it was written on, when there was one — "iPhone SE", not just "portrait"
+    device: device || '',
     category: categoryOf(category).id,
     status: 'open', note: '', replies: [],
     // who closed it: 'claude' from the CLI, 'you' from the browser. The pair

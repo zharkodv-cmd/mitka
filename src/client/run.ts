@@ -5,6 +5,7 @@ import { categoryOf } from "../store/categories.mjs";
 import { stateOf, STATE_LABEL } from "../store/status.mjs";
 import type { MitkaConfig } from "./config";
 import { DEVTOOLS_DEVICES } from "../devtools-devices.mjs";
+import { drawDevice, pageTints, inkFor } from "./devices";
 
 export function run(cfg: MitkaConfig) {
   const BREAKPOINTS = cfg.breakpoints;
@@ -321,7 +322,9 @@ export function run(cfg: MitkaConfig) {
   const history = document.querySelector<HTMLElement>(".dt-history")!;
   const studioBtn = document.querySelector<HTMLButtonElement>(".dt-studio-btn")!;
   const device = document.querySelector<HTMLElement>(".dt-device")!;
-  const shellImg = document.querySelector<HTMLImageElement>(".dt-shell-img")!;
+  const shellEl = document.querySelector<HTMLElement>(".dt-shell")!;
+  const chromeTop = document.querySelector<HTMLElement>('.dt-chrome[data-at="top"]')!;
+  const chromeBottom = document.querySelector<HTMLElement>('.dt-chrome[data-at="bottom"]')!;
   const ruler = document.querySelector<HTMLElement>(".dt-ruler")!;
   const devicesMenu = document.querySelector<HTMLDetailsElement>(".dt-devices")!;
   const hi = document.querySelector<HTMLElement>(".dt-notes-hi")!;
@@ -330,6 +333,7 @@ export function run(cfg: MitkaConfig) {
   const handles = [...document.querySelectorAll<HTMLElement>(".dt-frame-handle")];
   const sizeBadge = document.querySelector<HTMLElement>(".dt-frame-size")!;
   const rotateBtn = document.querySelector<HTMLButtonElement>(".dt-frame-rotate")!;
+  const barsBtn = document.querySelector<HTMLButtonElement>(".dt-frame-bars")!;
   const frame = document.querySelector<HTMLElement>(".dt-frame")!;
   /* The narrow breakpoints are rendered in an iframe: media queries read the viewport,
      not a container, so shrinking an element on this page would change nothing. Inside
@@ -344,7 +348,7 @@ export function run(cfg: MitkaConfig) {
     route?: string;
     id: number; selector: string; rx: number; ry: number;
     text: string; label: string; status: string; note: string; breakpoint?: string; category?: string;
-    doneBy?: string | null; images?: string[]; browser?: string;
+    doneBy?: string | null; images?: string[]; browser?: string; device?: string;
     tag?: string; classes?: string[]; nth?: number;
     replies?: { author: string; text: string; at: string }[];
     createdAt?: string; updatedAt?: string | null;
@@ -759,7 +763,7 @@ export function run(cfg: MitkaConfig) {
               byClaude ? `<b class="dt-hist-claude">${CLAUDE_MARK(9)}Claude</b>` : ""}${
               orphan ? `<b class="dt-hist-orphan" title="The element this was pinned to is not on the page right now">no pin</b>` : ""}</span>
             <span class="dt-hist-text">${last.author === "claude" ? "<b>Claude:</b> " : ""}${esc(last.text)}</span>
-            <span class="dt-hist-meta">${stamp(c.updatedAt || c.createdAt)}${c.browser ? ` \u00b7 ${esc(c.browser)}` : ""}${replies
+            <span class="dt-hist-meta">${stamp(c.updatedAt || c.createdAt)}${c.device ? ` \u00b7 ${esc(c.device)}` : c.browser ? ` \u00b7 ${esc(c.browser)}` : ""}${replies
               ? ` \u00b7 ${replies} repl${replies === 1 ? "y" : "ies"}` : ""}</span>
           </span>
         </button>
@@ -853,7 +857,7 @@ export function run(cfg: MitkaConfig) {
     /* In a canvas the page you are looking at is the iframe's, and this panel belongs
        to the document behind it — opening the thread here scrolled a page nobody could
        see. Hand the job to the copy that owns the pins. */
-    if (!frame.hidden && !deviceId) { tellFrame({ open: id }); return; }
+    if (!frame.hidden) { tellFrame({ open: id }); return; }
     goTo(id);
   });
 
@@ -1228,6 +1232,7 @@ export function run(cfg: MitkaConfig) {
           ...draft, route: ROUTE, text,
           breakpoint: currentBp(),
           browser: browserTag(),
+          device: inFrame ? deviceLabel : "",
           viewport: { w: innerWidth, h: innerHeight },
         }),
       });
@@ -1265,6 +1270,11 @@ export function run(cfg: MitkaConfig) {
 
   /* The canvas is a second copy of the bar and has no toolbar of its own: every mode
      it is in, it was told. */
+  let frameScrollbar: "overlay" | "classic" = "overlay";
+  /* Which device the canvas stands for, filed with every comment written in it: the
+     band says "portrait", this says "iPhone SE with the bars shown". */
+  let frameDevice = "";
+  let deviceLabel = ""; // in the copy: what the page last said
   const tellFrame = (msg: Record<string, unknown>) => {
     if (!frame.hidden) frameEl.contentWindow?.postMessage({ dt: true, ...msg }, location.origin);
   };
@@ -1274,13 +1284,16 @@ export function run(cfg: MitkaConfig) {
      copy fell back to the modes in storage, and a device preview came up in comment
      mode, turning every click on the page into a pin. */
   const frameState = () =>
-    ({ notes: notesOn && !deviceId, grid: !overlay.hidden, inspect, resolved: showResolved });
+    ({ notes: notesOn, grid: !overlay.hidden, inspect, resolved: showResolved, scrollbar: frameScrollbar, device: frameDevice });
   addEventListener("message", (e) => {
     if (e.origin !== location.origin || !(e.data as any)?.dt) return;
     const m = e.data as {
       hello?: boolean; notes?: boolean; reload?: boolean; grid?: boolean;
-      inspect?: Inspector; open?: number; resolved?: boolean;
+      inspect?: Inspector; open?: number; resolved?: boolean; scrollbar?: string; device?: string;
     };
+    if (inFrame && typeof m.device === "string") deviceLabel = m.device;
+    // Windows draws a scrollbar that takes width; the copy shows one when told to
+    if (inFrame && m.scrollbar) document.documentElement.classList.toggle("dt-sb-classic", m.scrollbar === "classic");
     if (m.hello && e.source === frameEl.contentWindow) { tellFrame(frameState()); return; }
     // applied without echo, or the page's own state would bounce straight back to it
     if (typeof m.notes === "boolean" && m.notes !== notesOn) setNotes(m.notes, false);
@@ -1316,7 +1329,7 @@ export function run(cfg: MitkaConfig) {
       historyBtn.setAttribute("aria-pressed", "true");
     }
     persist(NOTES_KEY, on ? "1" : "0");
-    tellFrame({ notes: on && !deviceId });
+    tellFrame({ notes: on });
     if (inFrame && echo) parent.postMessage({ dt: true, notes: on }, location.origin);
     notesOverlay.hidden = !on || !frame.hidden;
     document.documentElement.classList.toggle("dt-noting", on);
@@ -1360,6 +1373,8 @@ export function run(cfg: MitkaConfig) {
 
   let canvasOn = localStorage.getItem(CANVAS_KEY) === "1";
   let deviceId = localStorage.getItem(DEVICE_KEY) || "";
+  // a device the shelf no longer has (renamed, or dropped from the config) is no device
+  if (deviceId && !deviceById(deviceId)) { deviceId = ""; localStorage.setItem(DEVICE_KEY, ""); }
   let frameW = Number(localStorage.getItem(W_KEY)) || 0;
   /* A DevTools device: the canvas at that device's exact size, turned or not. It is the
      working canvas all the same — comments on, filed under the band the width is in. */
@@ -1373,6 +1388,10 @@ export function run(cfg: MitkaConfig) {
     const d = emuDevice();
     return d ? (emu!.turned ? { w: d.h, h: d.w } : { w: d.w, h: d.h }) : null;
   };
+  /* The preview's browser bars: shown, the way a page first loads, or folded, the way
+     they are once you scroll. A switch rather than following the scroll: folding them
+     resizes the iframe, and every vh inside would jump — which Safari's never do. */
+  let barsMin = localStorage.getItem("dt-bars-min") === "1";
   const setEmu = (next: Emu | null) => {
     emu = next;
     persist(EMU_KEY, next ? JSON.stringify(next) : "");
@@ -1419,9 +1438,68 @@ export function run(cfg: MitkaConfig) {
     device.dataset.scaled = k < 1 ? String(Math.round(k * 100)) : "";
   };
 
+  /* The Dynamic Island where Chrome DevTools puts it for a phone of this size. */
+  const cutoutOf = (d: { w: number; h: number }) =>
+    DEVTOOLS_DEVICES.find((x) => x.w === d.w && x.h === d.h && x.cutout)?.cutout;
+  const frameDoc = () => { try { return frameEl.contentDocument; } catch { return null; } };
+  const frameTitle = () => frameDoc()?.title.split("\u2014").pop()?.trim() || "";
+
+  /* The bars take their colour from the page, the way the real browser does: Safari
+     from the edges of the page, Chrome on Android from theme-color. Re-read on load
+     and while the page scrolls, since a sticky header can change it. */
+  const tintChrome = () => {
+    const doc = frameDoc();
+    const dev = deviceId ? deviceById(deviceId) : null;
+    if (!doc?.body || !dev) return;
+    const t = pageTints(doc);
+    const top = dev.browser === "chrome-android" ? t.theme || "rgb(255, 255, 255)" : t.top;
+    const bottom = dev.browser === "chrome-android" ? "rgb(255, 255, 255)" : t.bottom;
+    device.style.setProperty("--dt-top", top);
+    device.style.setProperty("--dt-top-ink", inkFor(top));
+    device.style.setProperty("--dt-bottom", bottom);
+    device.style.setProperty("--dt-bottom-ink", inkFor(bottom));
+    const tab = chromeTop.querySelector(".dt-win-tab > span");
+    if (tab) tab.textContent = frameTitle() || location.host;
+  };
+  let tintRaf = 0;
+  frameEl.addEventListener("load", () => {
+    if (!frameDoc()) return; // another site: nothing of it is ours to read
+    tintChrome();
+    frameEl.contentWindow?.addEventListener("scroll", () => {
+      if (tintRaf) return;
+      tintRaf = requestAnimationFrame(() => { tintRaf = 0; tintChrome(); });
+    }, { passive: true });
+  });
+  /* The drawn back, forward and reload work on the page in the frame — through the
+     frame's own Navigation API: history.back() walks the tab's joint history and could
+     take the page you are reviewing back instead. A page from another site cannot be
+     reached at all, so there reload means "back to this site". */
+  type FrameNav = { canGoBack: boolean; canGoForward: boolean; back(): void; forward(): void; reload(): void };
+  for (const bar of [chromeTop, chromeBottom]) {
+    bar.addEventListener("click", (e) => {
+      const nav = (e.target as Element).closest<HTMLElement>("[data-nav]")?.dataset.nav;
+      if (!nav) return;
+      try {
+        const n = (frameEl.contentWindow as unknown as { navigation?: FrameNav })?.navigation;
+        if (!frameDoc() || !n) throw new Error("foreign");
+        if (nav === "back") { if (n.canGoBack) n.back(); }
+        else if (nav === "fwd") { if (n.canGoForward) n.forward(); }
+        else n.reload();
+      } catch {
+        if (nav === "reload" || nav === "back") frameEl.src = location.href;
+      }
+    });
+  }
+  barsBtn.addEventListener("click", () => {
+    barsMin = !barsMin;
+    persist("dt-bars-min", barsMin ? "1" : "0");
+    applyCanvas();
+  });
+
   const applyCanvas = () => {
     if (inFrame) return;
-    const dev = deviceId ? deviceById(deviceId) : null;
+    const dev = deviceId ? deviceById(deviceId) ?? null : null;
+    if (deviceId && !dev) { deviceId = ""; localStorage.setItem(DEVICE_KEY, ""); }
 
     if (!dev && !canvasOn) {
       frame.hidden = true;
@@ -1435,6 +1513,7 @@ export function run(cfg: MitkaConfig) {
          "switching back and forth does nothing" that the bottom of this function
          never saw. */
       rotateBtn.hidden = true;
+      barsBtn.hidden = true;
       syncDeviceMenu();
       if (notesOn) loadNotes(); else renderNotes();
       return;
@@ -1446,31 +1525,52 @@ export function run(cfg: MitkaConfig) {
     if (!frameEl.src) frameEl.src = location.href;
 
     if (dev) {
-      const f = dev.frame;
-      const k = dev.w / f.sw;
+      const look = drawDevice(dev, { host: location.host, title: frameTitle(), now: new Date(), min: barsMin, cutout: cutoutOf(dev) });
+      const { screen } = look;
       frame.dataset.mode = "device";
-      device.dataset.frame = "1";
-      device.style.width = `${f.w * k}px`;
-      device.style.height = `${f.h * k}px`;
-      shellImg.src = f.src;
-      shellImg.hidden = false;
+      device.dataset.shell = dev.shell;
+      device.dataset.browser = dev.browser;
+      device.style.width = `${look.footprint.w}px`;
+      device.style.height = `${look.footprint.h}px`;
+      device.style.setProperty("--dt-r", `${screen.r}px`);
+      device.style.setProperty("--dt-rb", `${screen.rb}px`);
+      shellEl.innerHTML = look.shell;
+      const place = (el: HTMLElement, y: number, h: number, html: string) => {
+        el.innerHTML = html;
+        el.style.cssText = `left:${screen.x}px;top:${y}px;width:${screen.w}px;height:${h}px`;
+      };
+      place(chromeTop, screen.y, look.topH, look.top);
+      place(chromeBottom, screen.y + screen.h - look.bottomH, look.bottomH, look.bottom);
+      const pageH = screen.h - look.topH - look.bottomH;
       frameEl.style.position = "absolute";
-      frameEl.style.left = `${f.sx * k}px`;
-      frameEl.style.top = `${f.sy * k}px`;
-      frameEl.style.width = `${dev.w}px`;
-      frameEl.style.height = `${f.sh * k}px`;
+      frameEl.style.left = `${screen.x}px`;
+      frameEl.style.top = `${screen.y + look.topH}px`;
+      frameEl.style.width = `${screen.w}px`;
+      frameEl.style.height = `${pageH}px`;
       ruler.innerHTML = "";
-      tellFrame({ notes: false });
-      setBadge(`${dev.label} · ${dev.w}\u00d7${dev.h} · viewing only`);
+      const folded = barsMin && look.canMinimize;
+      frameScrollbar = look.scrollbar;
+      frameDevice = `${dev.label}${folded ? " \u00b7 bars folded" : ""}`;
+      bpFilter = bpOf(dev.w);
+      tellFrame({ notes: notesOn, scrollbar: frameScrollbar, device: frameDevice });
+      barsBtn.hidden = !look.canMinimize;
+      barsBtn.setAttribute("aria-pressed", String(folded));
+      /* The page gets what the browser leaves of the screen. Said out loud, because inside
+         an iframe every vh unit is that height — on the phone, 100vh is the taller one. */
+      setBadge(`${dev.label} \u00b7 page ${dev.w}\u00d7${pageH} of ${dev.w}\u00d7${dev.h}${folded ? " \u00b7 bars folded" : ""} \u00b7 ${BREAKPOINTS.find((b) => b.id === bpFilter)?.label ?? ""}`);
+      tintChrome();
     } else {
       const size = emuSize();
       if (!size) setEmu(null); // a device Chrome has since dropped from its list
       const w = size?.w || frameW || BREAKPOINTS.find((b) => b.id === currentBp())!.ideal;
       frameW = w;
       frame.dataset.mode = "canvas";
-      delete device.dataset.frame;
-      shellImg.hidden = true;
-      shellImg.removeAttribute("src");
+      delete device.dataset.shell;
+      delete device.dataset.browser;
+      shellEl.innerHTML = chromeTop.innerHTML = chromeBottom.innerHTML = "";
+      chromeTop.style.cssText = chromeBottom.style.cssText = "";
+      barsBtn.hidden = true;
+      frameScrollbar = "overlay";
       /* Full height on purpose: the canvas is a working surface, and a short one
          would hide exactly the sections you are trying to comment on. A DevTools device
          is the exception — its height is the point of picking it. */
@@ -1484,6 +1584,8 @@ export function run(cfg: MitkaConfig) {
       tellFrame({ notes: notesOn });
       const band = BREAKPOINTS.find((b) => b.id === bpOf(w))!;
       const named = emuDevice();
+      frameDevice = named ? `${named.label}${emu?.turned ? " \u00b7 landscape" : ""}` : "";
+      tellFrame({ scrollbar: frameScrollbar, device: frameDevice });
       setBadge(named && size
         ? `${named.label} \u00b7 ${size.w}\u00d7${size.h} \u00b7 ${band.label}`
         : `${w}px \u00b7 ${band.label}`);
@@ -1551,7 +1653,7 @@ export function run(cfg: MitkaConfig) {
     applyCanvas();
   });
 
-  /* Two lists behind one button: Preview (a real frame, looking only) and DevTools
+  /* Two lists behind one button: Preview (a real screen and its browser) and DevTools
      (every device Chrome knows, as a working canvas). The tab you were on is kept. */
   const tabs = [...devicesMenu.querySelectorAll<HTMLButtonElement>("[data-tab]")];
   const panels = [...devicesMenu.querySelectorAll<HTMLElement>("[data-panel]")];

@@ -368,29 +368,594 @@
     border-radius: 4px;
     overflow: hidden;
   }
-  /* Device mode: the shell is the mockup picture, the iframe sits in its screen hole.
-     overflow clips the page to the shell — it is taller than the hole. */
-  .dt-device[data-frame] {
-    position: relative;
-    transform-origin: center;
-    max-height: none;
-    border-radius: 0;
-  }
-  .dt-device[data-frame] iframe {
-    max-height: none;
-  }
-  .dt-shell-img {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-  }
   .dt-frame iframe {
     display: block;
     max-height: calc(100vh - 64px);
     border: 0;
     background: #fff;
+  }
+
+  /* ---------- Preview devices: a drawn body, a browser on its screen ----------
+     The body is SVG (devices.ts), the status bar and the browser are HTML laid over the
+     screen above and below the iframe. Sizes are the real ones in CSS px — the whole
+     device is scaled to the window afterwards, like everything in the frame. */
+  .dt-device[data-shell] {
+    position: relative;
+    overflow: visible;
+    max-height: none;
+    border-radius: 0;
+    transform-origin: center;
+  }
+  .dt-device[data-shell] iframe {
+    z-index: 1;
+    max-height: none;
+  }
+  .dt-shell {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .dt-shell svg {
+    display: block;
+  }
+  .dt-shell-body {
+    fill: #1c1c1e;
+    stroke: #4a4a4e;
+    stroke-width: 1.5;
+  }
+  .dt-shell-body--light {
+    fill: #d8d8dd;
+    stroke: #aeaeb2;
+  }
+  .dt-shell-bezel {
+    fill: #050505;
+  }
+  .dt-shell-btn {
+    fill: #3a3a3c;
+  }
+  .dt-shell-slot {
+    fill: #2c2c2e;
+  }
+  .dt-shell-homebtn {
+    fill: #0c0c0d;
+    stroke: #3a3a3c;
+    stroke-width: 2;
+  }
+  .dt-shell-screen {
+    fill: var(--dt-top, #fff);
+  }
+  .dt-shell-base {
+    fill: #2c2c2e;
+  }
+  .dt-shell-base--silver {
+    fill: #c9c9ce;
+  }
+  .dt-shell-lip {
+    fill: #8e8e93;
+  }
+  .dt-shell-stand {
+    fill: #c7c7cc;
+  }
+
+  .dt-chrome {
+    position: absolute;
+    z-index: 2;
+    box-sizing: border-box;
+    overflow: hidden;
+    pointer-events: none;
+    font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .dt-chrome:empty {
+    display: none;
+  }
+  .dt-chrome[data-at="top"] {
+    border-radius: var(--dt-r) var(--dt-r) 0 0;
+    background: var(--dt-top, #fff);
+    color: var(--dt-top-ink, #000);
+  }
+  .dt-chrome[data-at="bottom"] {
+    border-radius: 0 0 var(--dt-rb) var(--dt-rb);
+    background: var(--dt-bottom, #fff);
+    color: var(--dt-bottom-ink, #000);
+  }
+  .dt-chrome button {
+    display: grid;
+    place-items: center;
+    padding: 0;
+    background: none;
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    pointer-events: auto;
+  }
+  .dt-i {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .dt-i--fill {
+    fill: currentColor;
+    stroke: none;
+  }
+  .dt-i--batt {
+    width: 26px;
+    height: 13px;
+    stroke: none;
+  }
+  .dt-bar-group {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  /* iPhone: status bar around the island */
+  .dt-sb {
+    position: relative;
+  }
+  .dt-island {
+    position: absolute;
+    background: #000;
+    border-radius: 19px;
+  }
+  .dt-sb-time,
+  .dt-sb-icons {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .dt-sb-time {
+    left: 0;
+    right: calc(50% + 64px);
+    font: 600 17px/1 -apple-system, system-ui, sans-serif;
+  }
+  .dt-sb-icons {
+    left: calc(50% + 64px);
+    right: 0;
+    gap: 6px;
+  }
+  .dt-sb-icons .dt-i {
+    width: 17px;
+    height: 17px;
+  }
+  .dt-sb--mini {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 6px;
+    font: 600 12px/1 -apple-system, system-ui, sans-serif;
+  }
+  .dt-sb--mini .dt-i {
+    width: 13px;
+    height: 13px;
+  }
+  .dt-sb--mini .dt-i--batt {
+    width: 22px;
+    height: 11px;
+  }
+  .dt-sb-l,
+  .dt-sb-r {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  /* iOS 26 Safari: a floating glass row, the page's colour behind it */
+  .dt-ios-bar {
+    position: relative;
+  }
+  .dt-ios-row {
+    position: absolute;
+    top: 8px;
+    left: 14px;
+    right: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 48px;
+  }
+  /* no home indicator under it on a home-button phone, so the row sits lower */
+  .dt-device[data-shell="home"] .dt-ios-row {
+    top: auto;
+    bottom: 22px;
+  }
+  .dt-glass {
+    background: rgb(255 255 255 / 0.74);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    backdrop-filter: blur(16px) saturate(180%);
+    box-shadow: 0 2px 12px rgb(0 0 0 / 0.14), inset 0 0 0 0.5px rgb(255 255 255 / 0.7);
+    color: #111;
+  }
+  .dt-glass--round {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+  }
+  .dt-ios-url {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    min-width: 0;
+    height: 48px;
+    border-radius: 24px;
+    font: 500 15px/1 -apple-system, system-ui, sans-serif;
+  }
+  .dt-ios-url > span {
+    overflow: hidden;
+    padding: 0 34px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .dt-ios-url button {
+    position: absolute;
+    right: 12px;
+  }
+  .dt-ios-mini {
+    position: absolute;
+    top: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 70%;
+    padding: 7px 14px;
+    overflow: hidden;
+    border-radius: 14px;
+    font: 500 12px/1 -apple-system, system-ui, sans-serif;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    background: rgb(255 255 255 / 0.74);
+    box-shadow: 0 1px 8px rgb(0 0 0 / 0.12);
+    color: #111;
+  }
+  .dt-home-ind {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    width: 134px;
+    height: 5px;
+    transform: translateX(-50%);
+    border-radius: 3px;
+    background: currentColor;
+  }
+
+  /* Android: status bar with the camera hole, Chrome's toolbar, three-button navigation */
+  .dt-sb--android {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 18px;
+    font: 500 13px/1 Roboto, system-ui, sans-serif;
+  }
+  .dt-sb--android .dt-i {
+    width: 14px;
+    height: 14px;
+  }
+  .dt-sb--android .dt-i--batt {
+    width: 22px;
+    height: 11px;
+  }
+  .dt-punch {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    width: 12px;
+    height: 12px;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: #000;
+  }
+  .dt-and-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 56px;
+    padding: 0 8px 0 10px;
+  }
+  .dt-and-url {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+    height: 40px;
+    padding: 0 14px;
+    border-radius: 24px;
+    background: rgb(0 0 0 / 0.06);
+    font: 400 15px/1 Roboto, system-ui, sans-serif;
+  }
+  .dt-and-url span {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .dt-and-tabs {
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    border: 2px solid currentColor;
+    border-radius: 4px;
+    font: 700 10px/1 Roboto, system-ui, sans-serif;
+  }
+  .dt-and-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    height: 48px;
+    color: #3c3c3c;
+  }
+  .dt-device[data-browser="chrome-android"] .dt-chrome[data-at="bottom"] {
+    background: #fff;
+  }
+
+  /* iPad Safari */
+  .dt-sb--flat {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 22px;
+    font: 600 12px/1 -apple-system, system-ui, sans-serif;
+  }
+  .dt-sb--flat .dt-i {
+    width: 14px;
+    height: 14px;
+  }
+  .dt-ipad-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 50px;
+    padding: 0 18px;
+  }
+  .dt-ipad-url,
+  .dt-mac-url {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 44%;
+    height: 34px;
+    border-radius: 10px;
+    background: rgb(0 0 0 / 0.07);
+    font: 500 13px/1 -apple-system, system-ui, sans-serif;
+  }
+  .dt-ipad-url .dt-i,
+  .dt-mac-url .dt-i {
+    width: 13px;
+    height: 13px;
+  }
+  .dt-ipad-url button,
+  .dt-mac-url button {
+    position: absolute;
+    right: 10px;
+  }
+  .dt-ipad-foot {
+    position: relative;
+    height: 100%;
+  }
+  .dt-ipad-foot .dt-home-ind {
+    bottom: 6px;
+    width: 180px;
+  }
+
+  /* macOS: menu bar, a maximised Safari window, the Dock below it */
+  .dt-device[data-browser="safari-mac"] .dt-chrome[data-at="top"] {
+    background: #f6f6f6;
+    color: #1d1d1f;
+  }
+  .dt-mac-menu {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 33px;
+    padding: 0 18px;
+    background: #ececec;
+    font: 400 13px/1 -apple-system, system-ui, sans-serif;
+  }
+  .dt-mac-apps {
+    display: flex;
+    gap: 20px;
+  }
+  .dt-mac-notch {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 196px;
+    height: 33px;
+    transform: translateX(-50%);
+    border-radius: 0 0 10px 10px;
+    background: #000;
+  }
+  .dt-mac-menu .dt-sb-r {
+    gap: 12px;
+  }
+  .dt-mac-menu .dt-i {
+    width: 15px;
+    height: 15px;
+  }
+  .dt-mac-bar {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    height: 52px;
+    padding: 0 18px;
+    border-bottom: 1px solid #d9d9d9;
+    color: #555;
+  }
+  .dt-mac-url {
+    margin: 0 auto;
+    background: #fff;
+    box-shadow: inset 0 0 0 1px #dcdcdc;
+    color: #1d1d1f;
+  }
+  .dt-lights {
+    display: flex;
+    gap: 9px;
+  }
+  .dt-lights i {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #ff5f57;
+  }
+  .dt-lights i:nth-child(2) {
+    background: #febc2e;
+  }
+  .dt-lights i:nth-child(3) {
+    background: #28c840;
+  }
+  .dt-mac-dock {
+    display: grid;
+    place-items: center;
+    height: 100%;
+    background: linear-gradient(135deg, #5b7fd1, #8a4fd0 55%, #d06a8a);
+  }
+  .dt-dock,
+  .dt-win-apps {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .dt-dock {
+    padding: 5px 8px;
+    border-radius: 16px;
+    background: rgb(255 255 255 / 0.3);
+    box-shadow: inset 0 0 0 0.5px rgb(255 255 255 / 0.5);
+  }
+  .dt-dock i,
+  .dt-win-apps i {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: linear-gradient(160deg, hsl(var(--hue) 75% 62%), hsl(var(--hue) 70% 45%));
+  }
+
+  /* Windows 11: Chrome's tab strip and toolbar, the taskbar */
+  .dt-device[data-browser="chrome-windows"] .dt-chrome[data-at="top"] {
+    background: #dfe3e8;
+    color: #202124;
+  }
+  .dt-device[data-browser="chrome-windows"] .dt-chrome[data-at="bottom"] {
+    background: #eef1f5;
+    color: #1d1d1f;
+  }
+  .dt-win-tabs {
+    display: flex;
+    align-items: flex-end;
+    height: 41px;
+    padding-left: 8px;
+  }
+  .dt-win-tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 240px;
+    height: 34px;
+    box-sizing: border-box;
+    padding: 0 10px;
+    border-radius: 8px 8px 0 0;
+    background: #fff;
+    font: 400 12px/1 "Segoe UI", system-ui, sans-serif;
+  }
+  .dt-win-tab span {
+    flex: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .dt-win-tab .dt-i {
+    width: 14px;
+    height: 14px;
+  }
+  .dt-fav {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #9aa0a6;
+  }
+  .dt-win-new {
+    display: grid;
+    place-items: center;
+    align-self: center;
+    width: 28px;
+    height: 28px;
+    margin-left: 6px;
+  }
+  .dt-win-ctrl {
+    display: flex;
+    align-self: stretch;
+    margin-left: auto;
+  }
+  .dt-win-ctrl .dt-i {
+    width: 46px;
+    height: 41px;
+    padding: 12px 14px;
+    box-sizing: border-box;
+    stroke-width: 1.2;
+  }
+  .dt-win-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 46px;
+    padding: 0 12px;
+    border-bottom: 1px solid #dadce0;
+    background: #fff;
+    color: #5f6368;
+  }
+  .dt-win-url {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    height: 34px;
+    padding: 0 14px;
+    border-radius: 17px;
+    background: #f1f3f4;
+    color: #202124;
+    font: 400 14px/1 "Segoe UI", system-ui, sans-serif;
+  }
+  .dt-win-url span {
+    flex: 1;
+  }
+  .dt-win-task {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    border-top: 1px solid #d3d7dd;
+  }
+  .dt-win-apps i {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+  }
+  .dt-win-tray {
+    position: absolute;
+    right: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font: 400 11px/1.35 "Segoe UI", system-ui, sans-serif;
+    text-align: right;
+  }
+  .dt-win-tray .dt-i {
+    width: 15px;
+    height: 15px;
   }
 
   html.dt-in-frame .devtools {
@@ -406,6 +971,21 @@
   html.dt-in-frame::-webkit-scrollbar,
   html.dt-in-frame body::-webkit-scrollbar {
     display: none;
+  }
+  /* …except where the device is a Windows PC: Chrome there draws a real scrollbar that
+     takes its 15px out of the page's width, and the preview should too. */
+  html.dt-in-frame.dt-sb-classic {
+    scrollbar-width: auto;
+  }
+  html.dt-in-frame.dt-sb-classic::-webkit-scrollbar {
+    display: block;
+    width: 15px;
+    background: #f1f1f1;
+  }
+  html.dt-in-frame.dt-sb-classic::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border: 4px solid #f1f1f1;
+    border-radius: 8px;
   }
   html.dt-in-frame astro-dev-toolbar,
   html.dt-in-frame sanity-visual-editing {
@@ -455,8 +1035,8 @@
     font: 500 11px/1 ui-sans-serif, system-ui, sans-serif;
     pointer-events: none;
   }
-  /* Turns a DevTools device, next to the size it names. */
-  .dt-frame-rotate {
+  /* Buttons next to the size badge: turn a DevTools device, fold a preview's bars. */
+  .dt-frame-btn {
     position: fixed;
     top: 12px;
     left: calc(50% + var(--dt-badge-w, 0px) / 2 + 8px);
@@ -471,14 +1051,15 @@
     color: #f0f0f0;
     cursor: pointer;
   }
-  .dt-frame-rotate:hover {
+  .dt-frame-btn:hover,
+  .dt-frame-btn[aria-pressed="true"] {
     background: #0d99ff;
     border-color: #0d99ff;
   }
-  .dt-frame-rotate[hidden] {
+  .dt-frame-btn[hidden] {
     display: none;
   }
-  .dt-frame-rotate svg {
+  .dt-frame-btn svg {
     display: block;
     fill: none;
     stroke: currentColor;

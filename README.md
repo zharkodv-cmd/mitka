@@ -17,10 +17,15 @@ It exists only under `astro dev`. Nothing of it reaches a build.
   filed per page and per breakpoint.
 - **Breakpoints** — the page in a canvas at a band's width; drag either edge inside the
   band. Comments written there belong to that band.
-- **Devices** — two lists behind one button. *Preview*: the page inside a real device
-  mockup, for looking only. *DevTools*: every device Chrome DevTools knows (46, by kind,
-  searchable) — the canvas at that device's exact size, rotatable, and a working one:
-  comments go to the breakpoint its width falls in.
+- **Devices** — two lists behind one button. *Preview*: the eight screens most visitors
+  use (iPhone 15/16, iPhone 17 Pro Max, iPhone SE, Galaxy S25, iPad, MacBook Air,
+  a Windows laptop, a 1080p monitor), each drawn with its browser around the page —
+  status bar and Safari on iPhone, Chrome on Android, a Safari or Chrome window with the
+  menu bar and Dock or the taskbar on computers — so the page gets the height a real
+  browser leaves it (393×695 on an iPhone 16, not 393×852). *DevTools*: every device
+  Chrome DevTools knows (46, by kind, searchable) — the canvas at that device's exact
+  size, rotatable. Both are working surfaces: comments go to the breakpoint the width
+  falls in, and remember the device ("iPhone SE · bars folded").
 
 ## Install
 
@@ -61,7 +66,7 @@ the browser half is already new.
 | **Panel** | the list of this page's threads at this breakpoint |
 | **Resolved** | shows or hides resolved threads, on the page and in the menu |
 | **Breakpoints** | open the canvas at a band. The widest band is your own window |
-| **Device** | *Preview*: a device mockup, viewing only. *DevTools*: the canvas at a real device's size, comments on |
+| **Device** | *Preview*: a real screen with its browser. *DevTools*: the canvas at a device's size. Comments work in both |
 | **Tab** on top of the bar | folds the bar below the window edge and back |
 
 Keys: **Esc** closes a menu, then the note you are writing, then the open thread, then
@@ -145,7 +150,7 @@ export const zIndex = 2000000020;            // the bar's base layer
 | `pages` | from `src/pages` | route → `[name, group]` |
 | `groups` | by folder | group order |
 | `grid` | `container` / `grid` / 12 | classes of your own layout the overlay reuses |
-| `devices` | eight Apple devices | `{ id, label, group, w, h, frame }` — `frame` by name: `macbook` `ipad` `ipadLandscape` `iphone15Pro` `iphone11Pro` `iphone11ProMax` `iphone8` `iphoneLandscape` |
+| `devices` | the eight above | the preview shelf: `{ id, label, group, w, h, shell, browser, note? }` — `shell`: `island` `home` `punch` `tablet` `macbook` `laptop` `monitor`; `browser`: `safari-ios` `chrome-android` `safari-ipad` `safari-mac` `chrome-windows`; `note` is the row's tooltip. Before 0.3 a device had a `frame` picture; such an entry is skipped with a warning |
 | `sanity` | `false` | show the Sanity overlay toggle |
 | `ignore` | `[]` | selectors the inspectors and comment picker skip |
 | `zIndex` | `2000000020` | above Astro's dev toolbar and any app modal |
@@ -177,6 +182,13 @@ export default defineConfig({ integrations: [...(mitka ? [mitka()] : [])] });
   same browser could otherwise post a "comment" that Claude would read as a task.
 - The bar is sized in px on purpose: a site with a fluid root font-size would otherwise
   scale the dev UI along with the design.
+- A preview is an iframe, and some things only a real device or DevTools emulation shows:
+  every `vh`/`svh`/`lvh` unit is the iframe's height (on the phone `100vh` is the taller,
+  bars-folded one), `hover`/`pointer` media queries answer for your mouse,
+  `env(safe-area-inset-*)` is 0, and the pixel ratio is your screen's. The badge says
+  which page size you are looking at; the bars button switches to the folded one.
+- The browser heights are measured (iOS 26 Safari, Chrome, macOS, Windows 11) except the
+  Galaxy status bar and the iPad toolbar, which are estimates — see `src/client/devices.ts`.
 
 ## Development
 
@@ -184,12 +196,11 @@ export default defineConfig({ integrations: [...(mitka ? [mitka()] : [])] });
 src/integration.mjs       the Astro integration
 src/server/middleware.mjs /__devbar/* endpoints, mitka.config.mjs loading
 src/store/                comments.json store, tags, statuses — shared by CLI, server, browser
-src/presets.mjs           device mockups, devices, default breakpoints, switcher icons
+src/presets.mjs           the preview shelf, default breakpoints, switcher icons
 src/client/               the bar: markup.ts builds the DOM, run.ts is the behaviour, mitka.css
 bin/mitka.mjs             the CLI; bin/init.mjs is `mitka init`
-assets/                   device mockups, served under /__devbar/assets/
-tools/                    mockup prep (needs playwright): screen cut-out geometry, crop;
-                          sync-devtools-devices.mjs refreshes Chrome's device list
+src/client/devices.ts     the preview devices: bodies as SVG, status bars and browsers as HTML
+tools/                    sync-devtools-devices.mjs refreshes Chrome's device list
 ```
 
 `npm test` runs the selftest (store, CLI, init). To work on the bar, point a test

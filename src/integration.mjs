@@ -32,7 +32,7 @@ export default function mitka(options = {}) {
               // configureServer, not astro:server:setup: this runs before Astro's own
               // request handler is installed, so /__devbar/* never reaches the router.
               configureServer(server) {
-                server.middlewares.use(mitkaMiddleware({ root, pkg: PKG, options, routes: () => routes }));
+                server.middlewares.use(mitkaMiddleware({ root, options, routes: () => routes }));
               },
             }],
           },

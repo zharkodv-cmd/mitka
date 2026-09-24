@@ -1,20 +1,3 @@
-export interface DeviceFrame {
-  /** URL of the mockup picture; the package's own live under /__devbar/assets/ */
-  src: string;
-  /** pixel size of the picture */
-  w: number;
-  h: number;
-  /** the transparent screen hole inside it — measured with tools/measure-device-frames.mjs */
-  sx: number;
-  sy: number;
-  sw: number;
-  sh: number;
-}
-
-export type FrameName =
-  | 'macbook' | 'ipad' | 'ipadLandscape' | 'iphone15Pro'
-  | 'iphone11Pro' | 'iphone11ProMax' | 'iphone8' | 'iphoneLandscape';
-
 export interface Breakpoint {
   id: string;
   label: string;
@@ -27,16 +10,23 @@ export interface Breakpoint {
   icon?: string;
 }
 
+/** The body drawn around the screen */
+export type Shell = 'island' | 'home' | 'punch' | 'tablet' | 'macbook' | 'laptop' | 'monitor';
+/** The browser chrome drawn on the screen — it decides the height the page gets */
+export type Browser = 'safari-ios' | 'chrome-android' | 'safari-ipad' | 'safari-mac' | 'chrome-windows';
+
 export interface Device {
   id: string;
   label: string;
-  /** menu section: 'Phone' | 'Tablet' | 'Laptop' | anything */
+  /** menu section: 'Phone' | 'Tablet' | 'Laptop' | 'Desktop' | anything */
   group: string;
-  /** the device's own CSS viewport */
+  /** the device's CSS screen size; the page gets what the browser chrome leaves of it */
   w: number;
   h: number;
-  /** a mockup shipped with the package, by name, or your own geometry */
-  frame: DeviceFrame | FrameName;
+  shell: Shell;
+  browser: Browser;
+  /** the row's tooltip in the menu */
+  note?: string;
 }
 
 export interface MitkaOptions {
@@ -44,7 +34,7 @@ export interface MitkaOptions {
   enabled?: boolean;
   /** bands of the breakpoint switcher; defaults to desktop ≥992 / tablet / landscape / portrait */
   breakpoints?: Breakpoint[];
-  /** the device preview shelf; defaults to eight Apple devices */
+  /** the preview shelf; defaults to the eight screens most visitors use */
   devices?: Device[];
   /** route -> [menu name, group]; unlisted pages fall back to their <title>. Also how an
    *  address a dynamic route serves (/blog/some-post) gets into the menu */

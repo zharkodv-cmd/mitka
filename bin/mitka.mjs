@@ -65,6 +65,8 @@ if (cmd === '--selftest') {
   assert.equal(t.comments[0].replies[0].author, 'you');
   assert.equal(reply(t, 99, 'you', 'x'), null, 'reply to a missing comment reports');
   assert.equal(a.browser, '', 'no browser given stores empty, not undefined');
+  assert.equal(a.device, '', 'no device given stores empty');
+  assert.equal(add(t, { route: '/', selector: 'x', rx: 0, ry: 0, text: 'y', device: 'iPhone SE' }).device, 'iPhone SE', 'the device a note was written on is kept');
   assert.equal(add(t, { route: '/', selector: 'x', rx: 0, ry: 0, text: 'y', browser: 'Safari 18 · macOS' }).browser, 'Safari 18 · macOS');
   assert.equal(a.nth, null, 'no index given stores null rather than undefined');
   assert.equal(add(t, { route: '/', selector: 'x', rx: 0, ry: 0, text: 'y', nth: 0 }).nth, 0, 'index 0 survives, it is not falsy-dropped');
@@ -154,6 +156,9 @@ if (cmd === '--selftest') {
   const wrapped = readFileSync(join(dir3, 'astro.config.mjs'), 'utf8');
   assert.match(wrapped, /\} from '\.\/x\.mjs';\nconst mitka = await import\('mitka'\)/, 'lands after a wrapped import, not inside it');
   assert.match(wrapped, /integrations: \[\.\.\.\(mitka \? \[mitka\(\)\] : \[\]\), react\(\)\]/, 'an optional install is wired behind a catch');
+  // the preview shelf: every device drawable
+  const { DEVICES, SHELLS, BROWSERS } = await import('../src/presets.mjs');
+  assert.ok(DEVICES.every((d) => d.w > 0 && d.h > 0 && SHELLS.includes(d.shell) && BROWSERS.includes(d.browser)), 'every preview device has a size, a body and a browser');
   // the DevTools list: every row usable, ids unique, groups known
   const { DEVTOOLS_DEVICES, DEVTOOLS_GROUPS } = await import('../src/devtools-devices.mjs');
   assert.ok(DEVTOOLS_DEVICES.length > 30, 'the DevTools list is there');
@@ -238,7 +243,7 @@ if (cmd === 'digest' || cmd === 'count') {
   let route = '';
   for (const c of open.slice(0, CAP)) {
     if (c.route !== route) { route = c.route; console.log(route); }
-    console.log(`  id ${c.id} [${c.breakpoint || 'desktop'}]${c.browser ? ` [${c.browser}]` : ''} [${c.category || 'general'}] ${c.text.replace(/\s+/g, ' ').slice(0, 100)}`);
+    console.log(`  id ${c.id} [${c.breakpoint || 'desktop'}${c.device ? ` · ${c.device}` : ''}]${c.browser ? ` [${c.browser}]` : ''} [${c.category || 'general'}] ${c.text.replace(/\s+/g, ' ').slice(0, 100)}`);
     for (const img of c.images || []) console.log(`      screenshot: ${img}`);
   }
   if (open.length > CAP) console.log(`  …and ${open.length - CAP} more`);
@@ -259,7 +264,7 @@ let route = '';
 for (const c of list) {
   if (c.route !== route) { route = c.route; console.log(`\n${route}`); }
   const by = STATE_LABEL[stateOf(c)].toLowerCase();
-  console.log(`  #${seq.get(c.id)} (id ${c.id}) [${by}] [${c.breakpoint || 'desktop'}]${c.browser ? ` [${c.browser}]` : ''} [${c.category || 'general'}] ${c.text}`);
+  console.log(`  #${seq.get(c.id)} (id ${c.id}) [${by}] [${c.breakpoint || 'desktop'}${c.device ? ` · ${c.device}` : ''}]${c.browser ? ` [${c.browser}]` : ''} [${c.category || 'general'}] ${c.text}`);
   if (c.label) console.log(`       on: ${c.label}`);
   for (const img of c.images || []) console.log(`       img: ${img}`);
   if (c.note) console.log(`       me: ${c.note}`);

@@ -8,13 +8,12 @@
 //   PATCH  /__devbar/comments            edit / reply / attach / detach
 //   DELETE /__devbar/comments?id=        remove a thread and its screenshots
 //   GET    /__devbar/image?name=         a pasted screenshot from feedback/images/
-//   GET    /__devbar/assets/<file>       device mockups shipped with the package
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { join, isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createStore } from '../store/comments.mjs';
 import { CATEGORIES } from '../store/categories.mjs';
-import { BREAKPOINTS, DEVICES, ICONS, FRAMES } from '../presets.mjs';
+import { BREAKPOINTS, DEVICES, ICONS, SHELLS, BROWSERS } from '../presets.mjs';
 
 const MIME = {
   png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml',
@@ -86,11 +85,13 @@ export function buildConfig({ root, options, routes }) {
     max: Number.isFinite(b.max) ? b.max : null, // JSON has no Infinity; the client puts it back
     icon: b.icon ?? ICONS[b.id] ?? ICONS.desktop,
   }));
-  // a device's frame may be named ('ipad') rather than spelled out, so a project config
-  // needs no import from the package
-  const devices = (options.devices ?? DEVICES).map((d) => ({
-    ...d, frame: typeof d.frame === 'string' ? FRAMES[d.frame] : d.frame,
-  })).filter((d) => d.frame);
+  /* A device the client cannot draw would throw on every load it stays selected, so it
+     is dropped here and said so — including one still in the pre-0.3 picture shape. */
+  const devices = (options.devices ?? DEVICES).filter((d) => {
+    if (SHELLS.includes(d.shell) && BROWSERS.includes(d.browser)) return true;
+    console.warn(`[mitka] device "${d.id}" skipped: it needs shell (${SHELLS.join(', ')}) and browser (${BROWSERS.join(', ')})${d.frame ? '; `frame` pictures were replaced by shell + browser in 0.3' : ''}`);
+    return false;
+  });
   return {
     pages,
     groups: groups.filter((g) => pages.some((p) => p.group === g)),
@@ -142,9 +143,9 @@ const foreign = (req) => {
 };
 
 /**
- * @param {{ root: string, pkg: string, options: Record<string, any>, routes: () => any[] }} ctx
+ * @param {{ root: string, options: Record<string, any>, routes: () => any[] }} ctx
  */
-export function mitkaMiddleware({ root, pkg, options, routes }) {
+export function mitkaMiddleware({ root, options, routes }) {
   const store = createStore(root);
   const fileOptions = configLoader(root);
 
@@ -209,7 +210,7 @@ export function mitkaMiddleware({ root, pkg, options, routes }) {
 
   /* Basename only, from a fixed dir with a known extension: the name comes from the
      store, but this reads the disk, and "../../.env" is exactly the request a path
-     parameter invites. Same rule for the package's own assets. */
+     parameter invites. */
   const file = (res, dir, name) => {
     const base = name.replace(/^.*[/\\]/, '');
     const ext = base.split('.').pop()?.toLowerCase() ?? '';
@@ -228,7 +229,6 @@ export function mitkaMiddleware({ root, pkg, options, routes }) {
       if (path === 'config') return json(res, buildConfig({ root, options: { ...(await fileOptions()), ...options }, routes: routes() }));
       if (path === 'comments') return await comments(req, res, url);
       if (path === 'image') return file(res, store.imageDir, url.searchParams.get('name') || '');
-      if (path.startsWith('assets/')) return file(res, join(pkg, 'assets'), path.slice('assets/'.length));
       return text(res, 404, 'Not found');
     } catch (e) {
       return text(res, 500, String(e?.stack || e));

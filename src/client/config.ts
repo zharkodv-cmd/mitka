@@ -1,7 +1,11 @@
 // What /__devbar/config hands the browser. Mirrors buildConfig() in the middleware.
-export type DeviceFrame = { src: string; w: number; h: number; sx: number; sy: number; sw: number; sh: number };
 export type Breakpoint = { id: string; label: string; min: number; max: number; ideal: number; icon: string };
-export type Device = { id: string; label: string; group: string; w: number; h: number; frame: DeviceFrame };
+export type Shell = "island" | "home" | "punch" | "tablet" | "macbook" | "laptop" | "monitor";
+export type Browser = "safari-ios" | "chrome-android" | "safari-ipad" | "safari-mac" | "chrome-windows";
+export type Device = {
+  id: string; label: string; group: string; w: number; h: number;
+  shell: Shell; browser: Browser; note?: string;
+};
 export type Category = { id: string; label: string; color: string };
 export type Page = { route: string; name: string; label: string; group: string };
 export type MitkaConfig = {

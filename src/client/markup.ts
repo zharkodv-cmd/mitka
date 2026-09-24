@@ -33,7 +33,7 @@ export function mount(cfg: MitkaConfig) {
     .map((g) =>
       `<p class="dt-devices-group">${esc(g)}</p>` +
       cfg.devices.filter((d) => d.group === g).map((d) =>
-        `<button type="button" data-device="${esc(d.id)}" aria-pressed="false">` +
+        `<button type="button" data-device="${esc(d.id)}" aria-pressed="false"${d.note ? ` title="${esc(d.note)}"` : ""}>` +
         `<span class="dt-menu-label">${esc(d.label)}</span><em>${d.w}&times;${d.h}</em></button>`).join(""))
     .join("");
 
@@ -112,7 +112,7 @@ export function mount(cfg: MitkaConfig) {
           <button type="button" role="tab" data-tab="devtools" aria-selected="false">DevTools</button>
         </div>
         <div class="dt-menu-panel" role="tabpanel" data-panel="preview">
-          <p class="dt-menu-note">In a real device frame. Looking only: comments are off.</p>
+          <p class="dt-menu-note">The screens most visitors use, with the browser around the page. Comments go to the breakpoint its width falls in, with the device named.</p>
           ${devices}
         </div>
         <div class="dt-menu-panel" role="tabpanel" data-panel="devtools" hidden>
@@ -135,14 +135,19 @@ export function mount(cfg: MitkaConfig) {
   <div class="dt-stage">
     <span class="dt-frame-handle" data-edge="l" title="${handleTip}"></span>
     <div class="dt-device">
+      <div class="dt-shell"></div>
       <iframe title="Breakpoint preview"></iframe>
-      <img class="dt-shell-img" alt="" hidden />
+      <div class="dt-chrome" data-at="top"></div>
+      <div class="dt-chrome" data-at="bottom"></div>
     </div>
     <span class="dt-frame-handle" data-edge="r" title="${handleTip}"></span>
   </div>
   <div class="dt-ruler"></div>
   <span class="dt-frame-size"></span>
-  <button class="dt-frame-rotate" type="button" hidden title="Rotate">
+  <button class="dt-frame-bars dt-frame-btn" type="button" hidden title="Browser bars: shown / folded on scroll">
+    <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M10 3v14M6.5 6.5 10 3l3.5 3.5M6.5 13.5 10 17l3.5-3.5" /></svg>
+  </button>
+  <button class="dt-frame-rotate dt-frame-btn" type="button" hidden title="Rotate">
     <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M14.5 5.5A6.5 6.5 0 1 0 16.5 10" /><path d="M16.8 3.6v3.4h-3.4" /></svg>
   </button>
 </div>
