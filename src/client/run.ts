@@ -1573,13 +1573,14 @@ export function run(cfg: MitkaConfig) {
 
   notesBtn.addEventListener("click", () => setNotes(!notesOn));
 
-  /* The tab on top of the bar folds it away below the window edge, for the moments the
-     bar sits on exactly what you are looking at. The tab stays behind to bring it back,
-     and the modes stay as they were. Remembered, like every other switch here. */
+  /* The tab under the bar folds it away below the window edge, for the moments the bar
+     sits on exactly what you are looking at. The tab stays where it is to bring it
+     back, and the modes stay as they were. Remembered, like every other switch here. */
   const bar = document.querySelector<HTMLElement>(".devtools")!;
-  const tab = bar.querySelector<HTMLButtonElement>(".dt-tab")!;
+  const tab = document.querySelector<HTMLButtonElement>(".dt-tab")!;
   const setCollapsed = (on: boolean) => {
     bar.toggleAttribute("data-collapsed", on);
+    tab.toggleAttribute("data-collapsed", on);
     tab.setAttribute("aria-expanded", String(!on));
     tab.setAttribute("aria-label", on ? "Show the bar" : "Hide the bar");
     // out of sight, out of the tab order

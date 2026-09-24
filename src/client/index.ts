@@ -18,7 +18,7 @@ loadConfig()
     run(cfg);
     // everything the bar draws, except the canvas iframe (see toplayer.ts)
     keepAboveModals(
-      [".dt-grid-overlay", ".dt-pad-overlay", ".dt-notes-overlay", ".dt-notes-hi", ".dt-history", ".devtools"]
+      [".dt-grid-overlay", ".dt-pad-overlay", ".dt-notes-overlay", ".dt-notes-hi", ".dt-history", ".devtools", ".dt-tab"]
         .map((s) => document.querySelector<HTMLElement>(s))
         .filter((el): el is HTMLElement => !!el),
     );

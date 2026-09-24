@@ -46,9 +46,6 @@ export function mount(cfg: MitkaConfig) {
   document.body.insertAdjacentHTML("beforeend", `
 <!-- One bar, bottom-centre: pages | inspectors | comments | breakpoints · devices. -->
 <div class="devtools">
-  <button class="dt-tab" type="button" aria-expanded="true" aria-label="Hide the bar">
-    <svg viewBox="0 0 20 20" width="12" height="12" aria-hidden="true"><path d="M5.5 8 10 12.5 14.5 8" /></svg>
-  </button>
   <div class="dt-group dt-group--menus">
     <details class="dt-pages" name="dt-menu">
       <summary aria-label="Pages" title="Pages">
@@ -102,6 +99,12 @@ export function mount(cfg: MitkaConfig) {
     </details>
   </div>
 </div>
+
+<!-- The handle under the bar, on the window's bottom edge. Its own element, not the
+     bar's child: it stays put while the bar slides away. -->
+<button class="dt-tab" type="button" aria-expanded="true" aria-label="Hide the bar">
+  <svg viewBox="0 0 20 20" width="12" height="12" aria-hidden="true"><path d="M5.5 8 10 12.5 14.5 8" /></svg>
+</button>
 
 <div class="dt-frame" hidden aria-hidden="true">
   <div class="dt-stage">
