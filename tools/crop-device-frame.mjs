@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Crops a device mockup down to its largest opaque part, dropping anything that
 // floats beside it — the iPad Pro export ships with an Apple Pencil alongside.
-//   node tools/crop-device-frame.mjs assets/ipad.png
+// Works on the source PNG; the shipped file is WebP (lossless alpha, so the screen
+// hole stays exact): cwebp -q 90 -alpha_q 100 in.png -o assets/name.webp
+//   node tools/crop-device-frame.mjs ipad.png
 import { chromium } from "playwright";
 import { readFileSync, writeFileSync } from "node:fs";
 

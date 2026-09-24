@@ -6,7 +6,7 @@
 // open the store the same way, so a thread can never be written under one path and
 // read under another.
 import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { categoryOf } from './categories.mjs';
 
 export { CATEGORIES, categoryOf } from './categories.mjs';
@@ -75,7 +75,14 @@ export function createStore(root) {
   const rel = (name) => `feedback/images/${name}`;
 
   const load = () => (existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : { comments: [] });
-  const save = (db) => writeFileSync(file, JSON.stringify(db, null, 2) + '\n');
+  /* The folder may not exist yet — a fresh project's first comment has nowhere to go
+     otherwise. Written aside and renamed over, so a crash mid-write never leaves half a
+     JSON file where every thread used to be. */
+  const save = (db) => {
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(`${file}.tmp`, JSON.stringify(db, null, 2) + '\n');
+    renameSync(`${file}.tmp`, file);
+  };
 
   /**
    * Store a pasted screenshot next to the comments file and record its path.
@@ -112,11 +119,6 @@ export function createStore(root) {
   };
 
   /**
-   * Delete a thread and the screenshots that belonged to it. One place, because both
-   * the CLI and the middleware delete, and an orphaned image is a file nothing will
-   * ever point at again. Returns false if there was no such comment.
-   */
-  /**
    * Move every resolved thread out of the live store into
    * feedback/archive/comments-<date>.json, screenshots included, and leave `nextId`
    * behind so the numbering carries on. Nothing is deleted: the archive file is the
@@ -151,6 +153,11 @@ export function createStore(root) {
     return { moving, keeping, archiveFile, images };
   };
 
+  /**
+   * Delete a thread and the screenshots that belonged to it. One place, because both
+   * the CLI and the middleware delete, and an orphaned image is a file nothing will
+   * ever point at again. Returns false if there was no such comment.
+   */
   const remove = (db, id) => {
     const c = db.comments.find((x) => x.id === Number(id));
     if (!c) return false;

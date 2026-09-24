@@ -1,9 +1,9 @@
 // What kind of note a comment is, carried as the colour inside its pin — you can
 // read a page's worth of feedback without opening a single card.
 //
-// Pure data with no node APIs, like breakpoints.mjs: comments.mjs (which reads the
-// filesystem) and the browser bundle in DevTools.astro both import it. Putting this
-// in comments.mjs broke the page — Vite externalises `node:fs` for the browser.
+// Pure data with no node APIs: comments.mjs (which reads the filesystem) and the
+// browser client both import it. It cannot live in comments.mjs — Vite externalises
+// `node:fs` for the browser.
 //
 // Four, and that is the ceiling: past a handful nobody remembers which colour means
 // what and the picker stops being a glance. `general` is the default and keeps the

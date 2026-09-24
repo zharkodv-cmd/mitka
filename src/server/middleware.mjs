@@ -9,8 +9,9 @@
 //   DELETE /__devbar/comments?id=        remove a thread and its screenshots
 //   GET    /__devbar/image?name=         a pasted screenshot from feedback/images/
 //   GET    /__devbar/assets/<file>       device mockups shipped with the package
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, statSync } from 'node:fs';
 import { join, isAbsolute } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { createStore } from '../store/comments.mjs';
 import { CATEGORIES } from '../store/categories.mjs';
 import { BREAKPOINTS, DEVICES, ICONS, FRAMES } from '../presets.mjs';
@@ -24,16 +25,18 @@ const figmaOrder = (name) =>
   name.split('.').slice(0, 2).map(Number).reduce((a, b) => a * 100 + (Number.isNaN(b) ? 9999 : b), 0);
 
 /** Page <title> from the source, minus a "Site name — " prefix. Null when unreadable. */
-const titleOf = (root, entrypoint) => {
+export const titleOf = (root, entrypoint) => {
   try {
     const src = readFileSync(isAbsolute(entrypoint) ? entrypoint : join(root, entrypoint), 'utf8');
     return src.match(/title="([^"]+)"/)?.[1].split('—').pop()?.trim() || null;
   } catch { return null; }
 };
 
+/** '/docs/getting-started' → 'Docs'. */
+export const titled = (segment) => segment[0].toUpperCase() + segment.slice(1).replace(/[-_]+/g, ' ');
+
 /** Everything the browser side draws from: pages, bands, devices, tags, knobs. */
 export function buildConfig({ root, options, routes }) {
-  const groups = options.groups ?? ['Pages'];
   const named = options.pages ?? {};
   const row = (route, name, group) => ({
     // "1.1.1.D. Homepage" is sorted by its number and read without it
@@ -44,37 +47,55 @@ export function buildConfig({ root, options, routes }) {
     // /blog, which is already a row of its own. Injected routes (a CMS studio) and
     // Astro's own 404/500 are not pages of the site either.
     .filter((r) => r.origin === 'project' && r.type === 'page' && !r.pattern.includes('['))
-    .map((r) => {
-      const route = r.pattern.replace(/\/+$/, '') || '/';
-      const [name, group] = named[route] ?? [titleOf(root, r.entrypoint) ?? route, groups[groups.length - 1]];
-      return row(route, name, group);
-    });
+    .map((r) => ({ route: r.pattern.replace(/\/+$/, '') || '/', entrypoint: r.entrypoint }));
   // An address a dynamic route serves — /locations/san-diego out of
   // /locations/[campus] — cannot be discovered: Astro knows the pattern, only the
-  // project knows which slugs exist. Naming one in `pages` is how it says so, and
-  // those are the rows that would otherwise be missing from the menu entirely.
+  // project knows which slugs exist. Naming one in `pages` is how it says so.
   const seen = new Set(discovered.map((p) => p.route));
-  const declared = Object.entries(named)
-    .filter(([route]) => !seen.has(route))
-    .map(([route, [name, group]]) => row(route, name, group ?? groups[groups.length - 1]));
-  const pages = [...discovered, ...declared]
-    .sort((a, b) =>
-      groups.indexOf(a.group) - groups.indexOf(b.group) ||
-      figmaOrder(a.name) - figmaOrder(b.name) ||
-      a.route.localeCompare(b.route));
+  const all = [...discovered, ...Object.keys(named).filter((r) => !seen.has(r)).map((route) => ({ route }))];
+
+  /* With no `groups` the menu groups itself by folder: /docs/a and /docs/b are Docs,
+     a page with no siblings under its segment stays in Pages. With `groups`, a page
+     the map does not name lands in the last one. */
+  const folders = {};
+  for (const { route } of all) {
+    const seg = route.split('/')[1];
+    if (seg) folders[seg] = (folders[seg] || 0) + 1;
+  }
+  const autoGroup = (route) => {
+    const seg = route.split('/')[1];
+    return seg && folders[seg] > 1 ? titled(seg) : 'Pages';
+  };
+  const fallback = options.groups ? () => options.groups[options.groups.length - 1] : autoGroup;
+  const rows = all.map(({ route, entrypoint }) => {
+    const [name, group] = named[route] ?? [];
+    return row(route, name ?? (entrypoint && titleOf(root, entrypoint)) ?? route, group ?? fallback(route));
+  });
+  const groups = options.groups ?? [...new Set([
+    ...Object.values(named).map(([, g]) => g).filter(Boolean),
+    'Pages',
+    ...rows.map((p) => p.group).sort(),
+  ])];
+  const pages = rows.sort((a, b) =>
+    groups.indexOf(a.group) - groups.indexOf(b.group) ||
+    figmaOrder(a.name) - figmaOrder(b.name) ||
+    a.route.localeCompare(b.route));
+
   const breakpoints = (options.breakpoints ?? BREAKPOINTS).map((b) => ({
-    frameH: null, device: null, ...b,
-    // a frame may be named ('macbook') rather than spelled out, so a project config
-    // needs no import from the package
-    frame: typeof b.frame === 'string' ? FRAMES[b.frame] ?? null : b.frame ?? null,
+    id: b.id, label: b.label, min: b.min, ideal: b.ideal,
     max: Number.isFinite(b.max) ? b.max : null, // JSON has no Infinity; the client puts it back
     icon: b.icon ?? ICONS[b.id] ?? ICONS.desktop,
   }));
+  // a device's frame may be named ('ipad') rather than spelled out, so a project config
+  // needs no import from the package
+  const devices = (options.devices ?? DEVICES).map((d) => ({
+    ...d, frame: typeof d.frame === 'string' ? FRAMES[d.frame] : d.frame,
+  })).filter((d) => d.frame);
   return {
     pages,
     groups: groups.filter((g) => pages.some((p) => p.group === g)),
     breakpoints,
-    devices: options.devices ?? DEVICES,
+    devices,
     categories: CATEGORIES,
     sanity: Boolean(options.sanity),
     ignore: options.ignore ?? [],
@@ -87,11 +108,45 @@ export function buildConfig({ root, options, routes }) {
   };
 }
 
+/* mitka.config.mjs at the project root, re-read whenever it changes: a page reload
+   picks up a renamed page or a new band without restarting the dev server. Named
+   exports or a default object, either works. A file that does not parse mid-edit
+   keeps the last good version rather than taking the bar down. */
+const configLoader = (root) => {
+  const file = join(root, 'mitka.config.mjs');
+  let stamp = 0;
+  let last = {};
+  return async () => {
+    if (!existsSync(file)) return {};
+    const t = statSync(file).mtimeMs;
+    if (t === stamp) return last;
+    stamp = t;
+    try {
+      const { default: dflt, ...named } = await import(`${pathToFileURL(file).href}?t=${t}`);
+      last = { ...named, ...dflt };
+    } catch (e) {
+      console.warn(`[mitka] mitka.config.mjs: ${e.message}`);
+    }
+    return last;
+  };
+};
+
+/* Writes come from the bar on this page and nowhere else. Any site open in the same
+   browser can send a no-cors POST to localhost, and what lands in comments.json is
+   read by Claude as a to-do list — so a request that names a foreign origin is
+   refused. Browsers send Origin on every non-GET fetch; the CLI never comes here. */
+const foreign = (req) => {
+  const origin = req.headers.origin;
+  if (!origin) return false;
+  try { return new URL(origin).host !== req.headers.host; } catch { return true; }
+};
+
 /**
  * @param {{ root: string, pkg: string, options: Record<string, any>, routes: () => any[] }} ctx
  */
 export function mitkaMiddleware({ root, pkg, options, routes }) {
   const store = createStore(root);
+  const fileOptions = configLoader(root);
 
   const send = (res, status, body, type = 'application/json') => {
     res.statusCode = status;
@@ -111,6 +166,7 @@ export function mitkaMiddleware({ root, pkg, options, routes }) {
   });
 
   const comments = async (req, res, url) => {
+    if (req.method !== 'GET' && foreign(req)) return text(res, 403, 'Cross-origin write refused');
     if (req.method === 'GET') {
       const route = url.searchParams.get('route');
       const db = store.load();
@@ -168,7 +224,8 @@ export function mitkaMiddleware({ root, pkg, options, routes }) {
     const url = new URL(req.url, 'http://devbar');
     const path = url.pathname.slice('/__devbar/'.length);
     try {
-      if (path === 'config') return json(res, buildConfig({ root, options, routes: routes() }));
+      // what astro.config passes wins over the file
+      if (path === 'config') return json(res, buildConfig({ root, options: { ...(await fileOptions()), ...options }, routes: routes() }));
       if (path === 'comments') return await comments(req, res, url);
       if (path === 'image') return file(res, store.imageDir, url.searchParams.get('name') || '');
       if (path.startsWith('assets/')) return file(res, join(pkg, 'assets'), path.slice('assets/'.length));

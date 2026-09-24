@@ -10,7 +10,7 @@ import { chromium } from "playwright";
 import { readFileSync, readdirSync } from "node:fs";
 
 const dir = "assets";
-const files = readdirSync(dir).filter((f) => f.endsWith(".png"));
+const files = readdirSync(dir).filter((f) => /\.(png|webp)$/.test(f));
 const b = await chromium.launch();
 const p = await b.newPage();
 const out = {};
@@ -63,7 +63,7 @@ for (const f of files) {
       if (!best || area > best.area) best = { area, sx: x0, sy: y0, sw: x1 - x0 + 1, sh: y1 - y0 + 1 };
     }
     return { w: W, h: H, ...(best || {}) };
-  }, `data:image/png;base64,${b64}`);
+  }, `data:image/${f.endsWith(".webp") ? "webp" : "png"};base64,${b64}`);
 }
 await b.close();
 

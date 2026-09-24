@@ -1,9 +1,6 @@
-// What /__devbar/config hands the browser (the endpoint keeps its old name; the classes keep dt-). Mirrors buildConfig() in the middleware.
+// What /__devbar/config hands the browser. Mirrors buildConfig() in the middleware.
 export type DeviceFrame = { src: string; w: number; h: number; sx: number; sy: number; sw: number; sh: number };
-export type Breakpoint = {
-  id: string; label: string; min: number; max: number; ideal: number;
-  frameH: number | null; device: string | null; frame: DeviceFrame | null; icon: string;
-};
+export type Breakpoint = { id: string; label: string; min: number; max: number; ideal: number; icon: string };
 export type Device = { id: string; label: string; group: string; w: number; h: number; frame: DeviceFrame };
 export type Category = { id: string; label: string; color: string };
 export type Page = { route: string; name: string; label: string; group: string };

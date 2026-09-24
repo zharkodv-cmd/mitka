@@ -18,19 +18,11 @@ export type FrameName =
 export interface Breakpoint {
   id: string;
   label: string;
-  /** the band, in CSS px; `max: Infinity` for the widest */
+  /** the band, in CSS px; `max: Infinity` for the widest, which has no canvas — it is your own window */
   min: number;
   max: number;
   /** the width the canvas opens at */
   ideal: number;
-  /** height of the CSS shell when there is no `frame` */
-  frameH?: number | null;
-  /** which CSS shell to draw without a `frame`: 'laptop' | 'tablet' | 'phone' */
-  device?: string | null;
-  /** a real mockup picture to sit the canvas inside — one shipped with the package by
-   *  name ('macbook' | 'ipad' | 'ipadLandscape' | 'iphone15Pro' | 'iphone11Pro' |
-   *  'iphone11ProMax' | 'iphone8' | 'iphoneLandscape') or your own geometry */
-  frame?: DeviceFrame | FrameName | (string & {}) | null;
   /** SVG paths for the switcher glyph (viewBox 0 0 20 20, stroked); defaults by id */
   icon?: string;
 }
@@ -43,19 +35,22 @@ export interface Device {
   /** the device's own CSS viewport */
   w: number;
   h: number;
-  frame: DeviceFrame;
+  /** a mockup shipped with the package, by name, or your own geometry */
+  frame: DeviceFrame | FrameName;
 }
 
 export interface MitkaOptions {
   /** `false` keeps the bar out entirely — the switch Playwright flips */
   enabled?: boolean;
-  /** bands of the breakpoint switcher; defaults to the starter's four */
+  /** bands of the breakpoint switcher; defaults to desktop ≥992 / tablet / landscape / portrait */
   breakpoints?: Breakpoint[];
   /** the device preview shelf; defaults to eight Apple devices */
   devices?: Device[];
-  /** route -> [menu name, group]; unlisted pages fall back to their <title> */
-  pages?: Record<string, string[]>;
-  /** group order in the page menu; unlisted pages land in the last one */
+  /** route -> [menu name, group]; unlisted pages fall back to their <title>. Also how an
+   *  address a dynamic route serves (/blog/some-post) gets into the menu */
+  pages?: Record<string, [name: string, group?: string]>;
+  /** group order in the page menu; unlisted pages land in the last one. Without it the
+   *  menu groups pages by folder */
   groups?: string[];
   /** show the toggle that hides Sanity's visual-editing overlay */
   sanity?: boolean;
@@ -67,4 +62,7 @@ export interface MitkaOptions {
   zIndex?: number;
 }
 
+/** Everything but `enabled` can also live in `mitka.config.mjs` at the project root
+ *  (named exports or a default object), re-read on every page load. Options passed
+ *  here win over the file. */
 export default function mitka(options?: MitkaOptions): any;

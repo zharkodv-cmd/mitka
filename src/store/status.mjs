@@ -5,9 +5,9 @@
 //   done    you closed it
 //   claude  I closed it — resolved, but by me, so it stays worth a look
 //
-// Node-free, like categories.mjs: comments.mjs (which reads the filesystem) and the
-// browser bundle in DevTools.astro both import it, and one rule in two places is how
-// the panel and the CLI end up disagreeing about what "open" means.
+// Node-free, like categories.mjs: the CLI, the middleware and the browser client all
+// import it, and one rule in two places is how the panel and the CLI end up
+// disagreeing about what "open" means.
 export const stateOf = (c) =>
   c.status !== 'done' ? 'open' : c.doneBy === 'claude' ? 'claude' : 'done';
 
