@@ -1,6 +1,6 @@
-// The bar's behaviour, ported from the Coast Flight DevTools.astro script as one
-// unit. It runs twice when a canvas is open — once in the page, once in the iframe
-// copy — and the two talk through postMessage.
+// The bar's behaviour. It runs twice when a canvas is open — once in the page, once in
+// the iframe copy — and the two talk through postMessage. The page is the one in
+// charge: the copy never reads the modes from storage, it asks (see `hello`).
 import { categoryOf } from "../store/categories.mjs";
 import { stateOf, STATE_LABEL } from "../store/status.mjs";
 import type { MitkaConfig } from "./config";
@@ -8,9 +8,18 @@ import type { MitkaConfig } from "./config";
 export function run(cfg: MitkaConfig) {
   const BREAKPOINTS = cfg.breakpoints;
   const CATEGORIES = cfg.categories;
+  /* The widest band is your own window rather than a canvas, and it is where a note
+     with no band on record belongs. Found by shape, not by the id "desktop". */
+  const WIDE = (BREAKPOINTS.find((b) => !Number.isFinite(b.max)) ?? BREAKPOINTS[0]).id;
   const bpOf = (width: number) =>
-    BREAKPOINTS.find((b) => width >= b.min && width <= b.max)?.id ?? "desktop";
+    BREAKPOINTS.find((b) => width >= b.min && width <= b.max)?.id ?? WIDE;
+  const bandOfNote = (n: { breakpoint?: string }) => n.breakpoint || WIDE;
   const deviceById = (id: string) => cfg.devices.find((d) => d.id === id);
+  /* Inside the canvas the same page runs a second copy of the bar. It shares this
+     origin's localStorage, so everything it would remember is either the page's
+     already or — the device preview forcing comments off — wrong for the page. */
+  const inFrame = window.self !== window.top;
+  const persist = (key: string, value: string) => { if (!inFrame) localStorage.setItem(key, value); };
 
   /* Every tool button writes its hint as `title`, which is the one place the text
      should live — but the native tooltip needs a second of dead-still cursor and never
@@ -29,18 +38,43 @@ export function run(cfg: MitkaConfig) {
   const setGrid = (on: boolean) => {
     overlay.hidden = !on;
     btn.setAttribute("aria-pressed", String(on));
-    localStorage.setItem(KEY, on ? "1" : "0");
+    persist(KEY, on ? "1" : "0");
     tellFrame({ grid: on });
   };
   btn.addEventListener("click", () => setGrid(overlay.hidden === true));
 
-  // Summary shows the page name from <title> ("Coast Flight — UI Kit" → "UI Kit")
+  // Summary shows the page name from <title> ("Site — About" → "About")
   const summary = document.querySelector<HTMLElement>(".dt-pages-name")!;
   const active = document.querySelector<HTMLElement>(".dt-pages a[aria-current]");
   const t = document.title.split("—").pop()?.trim();
   // .dt-menu-label, not the whole row: the row also holds the route in an <em>
   const activeName = active?.querySelector(".dt-menu-label")?.textContent?.trim();
   summary.textContent = activeName || t || summary.textContent;
+
+  /* The pages and devices menus are <details>, which only ever close on their own
+     summary. Escape, a click anywhere else and focus leaving the window (a click into
+     the canvas iframe) close them too. In comment mode that outside click only closes
+     the menu — it must not also drop a pin where it landed. */
+  const menus = [...document.querySelectorAll<HTMLDetailsElement>(".devtools details")];
+  let swallowClick = false;
+  const closeMenus = () => {
+    const open = menus.filter((m) => m.open);
+    for (const m of open) m.open = false;
+    return open;
+  };
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    const [was] = closeMenus();
+    if (!was) return;
+    was.querySelector("summary")?.focus();
+    // Escape also backs out of comment mode; one press, one step
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  }, true);
+  document.addEventListener("pointerdown", (e) => {
+    swallowClick = menus.some((m) => m.open && !m.contains(e.target as Node)) && closeMenus().length > 0;
+  }, true);
+  addEventListener("blur", closeMenus);
 
   /* Three inspectors over one overlay — spacing, size, type. Only one can be on at a
      time: they all answer "what is this element" for whatever the cursor is over, and
@@ -49,6 +83,9 @@ export function run(cfg: MitkaConfig) {
   const padOverlay = document.querySelector<HTMLElement>(".dt-pad-overlay")!;
   const INSPECT_KEY = "dt-inspect";
   const SKIP = [".devtools", ".dt-pad-overlay", ".dt-grid-overlay", ".dt-frame", ".dt-history", ...cfg.ignore].join(", ");
+  /* What comment mode leaves alone: the bar's own parts, and whatever the project told
+     it to ignore — a dev nav stays a nav. */
+  const NOT_PINNABLE = [".devtools", ".dt-notes-overlay", ".dt-history", ".dt-frame", ...cfg.ignore].join(", ");
   type Inspector = "" | "pads" | "sizes" | "type";
   const inspectBtns: Record<Exclude<Inspector, "">, HTMLButtonElement> = {
     pads: document.querySelector<HTMLButtonElement>(".dt-pad-btn")!,
@@ -260,7 +297,7 @@ export function run(cfg: MitkaConfig) {
   const setInspect = (key: Inspector) => {
     inspect = key;
     for (const [k, b] of Object.entries(inspectBtns)) b.setAttribute("aria-pressed", String(k === key));
-    localStorage.setItem(INSPECT_KEY, key);
+    persist(INSPECT_KEY, key);
     tellFrame({ inspect: key });
     padOverlay.hidden = !key;
     padOverlay.innerHTML = "";
@@ -292,12 +329,10 @@ export function run(cfg: MitkaConfig) {
   const handles = [...document.querySelectorAll<HTMLElement>(".dt-frame-handle")];
   const sizeBadge = document.querySelector<HTMLElement>(".dt-frame-size")!;
   const frame = document.querySelector<HTMLElement>(".dt-frame")!;
-  const frameEl = frame.querySelector("iframe")!;
   /* The narrow breakpoints are rendered in an iframe: media queries read the viewport,
      not a container, so shrinking an element on this page would change nothing. Inside
-     that iframe this same component runs again — it must not open another one. */
-  const inFrame = window.self !== window.top;
-  if (inFrame) document.documentElement.classList.add("dt-in-frame");
+     that iframe this same code runs again — it must not open another one. */
+  const frameEl = frame.querySelector("iframe")!;
   const notesCount = document.querySelector<HTMLElement>(".dt-notes-count")!;
   const notesOverlay = document.querySelector<HTMLElement>(".dt-notes-overlay")!;
   const NOTES_KEY = "dt-notes";
@@ -336,7 +371,7 @@ export function run(cfg: MitkaConfig) {
   /* A half-typed comment is work. It lived in `draft` alone, so an HMR reload — or the
      stray refresh that follows one — took the sentence with it. Kept per route: the
      draft belongs to the page it points at, and two tabs on two pages never fight. */
-  const DRAFT_KEY = `dt-draft:${ROUTE}`;
+  const DRAFT_KEY = `dt-draft:${ROUTE}${inFrame ? ":canvas" : ""}`;
   let draftSave = 0;
   const writeDraft = () => {
     if (!draft && !replyDraft) { localStorage.removeItem(DRAFT_KEY); return; }
@@ -411,7 +446,7 @@ export function run(cfg: MitkaConfig) {
      Without the fallbacks a pin would silently jump to whatever now sits at that
      nth-of-type slot, which is worse than moving: it would point at the wrong thing. */
   /* Both sides cleaned. Sanity's visual editing writes zero-width markers into the
-     page text — 1773 of them inside a single element on /alternative-careers — and the
+     page text — well over a thousand inside a single element on a CMS page — and the
      label was stored clean, so comparing it against a raw textContent never matched.
      Every pin on a CMS-heavy page then fell through to the fallback and landed on
      whatever came first in the pool. */
@@ -509,6 +544,23 @@ export function run(cfg: MitkaConfig) {
       return shot(src, `data-id="${id}" data-img="${esc(name)}"`);
     }).join("")}</div>`;
 
+  const CLIP = `<svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="2"/><circle cx="7.5" cy="8.5" r="1.4"/><path d="m3.5 14.5 4-4 3 3 2-2 4 4"/></svg>`;
+
+  /* The box you write in: one bordered field holding the text, the screenshot waiting
+     to go with it and the row of actions — Figma's composer. The input and the picture
+     used to sit loose on the card, and nothing said the picture was part of what Enter
+     would send. The border turns blue while you type. */
+  const compose = (cls: string, placeholder: string, value: string, send: string, extra = "") =>
+    `<div class="dt-note-foot"><div class="dt-compose">
+      <textarea class="${cls}" rows="1" placeholder="${placeholder}">${esc(value)}</textarea>
+      ${extra}
+      <div class="dt-compose-bar">
+        <button class="dt-attach" data-act="attach" title="Attach a screenshot \u2014 or paste or drop one">${CLIP}</button>
+        <button class="dt-send${value.trim() ? " is-ready" : ""}" ${send} title="Send (Enter)"
+          ><svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M10 15.5v-11M5.5 9 10 4.5 14.5 9"/></svg></button>
+      </div>
+    </div></div>`;
+
   /* What the pin is attached to, in the same words the hover highlight uses. */
   const elName = (tag?: string, classes?: string[]) =>
     (tag || "element") + (classes?.[0] ? "." + classes[0] : "");
@@ -533,7 +585,7 @@ export function run(cfg: MitkaConfig) {
      you can see the pins anyway. A number while threads are open, my mark when all that
      is left is my own fixes to be checked, a tick when the page is signed off. */
   const renderBadge = (bp: string) => {
-    const mine = notes.filter((c) => (c.breakpoint || "desktop") === bp);
+    const mine = notes.filter((c) => bandOfNote(c) === bp);
     const open = mine.filter((c) => stateOf(c) === "open").length;
     const claude = mine.filter((c) => stateOf(c) === "claude").length;
     notesCount.innerHTML = open ? String(open) : claude ? CLAUDE_MARK(9) : "\u2713";
@@ -551,7 +603,7 @@ export function run(cfg: MitkaConfig) {
     const bp = bp0;
     let html = "";
     const visible = notes.filter(
-      (n) => (n.breakpoint || "desktop") === bp && (showResolved || stateOf(n) !== "done"));
+      (n) => bandOfNote(n) === bp && (showResolved || stateOf(n) !== "done"));
     for (const c of visible) {
       const a = anchorOf(c);
       /* No anchor means the element is gone or hidden — a pin at 0,0 would lie about
@@ -608,11 +660,7 @@ export function run(cfg: MitkaConfig) {
             </div>`).join("")}
             ${shots(c.images, c.id)}
           </div>
-          <div class="dt-note-foot">
-            <textarea class="dt-note-reply-input" rows="1" placeholder="Reply">${esc(replyDraft)}</textarea>
-            <button class="dt-send${replyDraft.trim() ? " is-ready" : ""}" data-act="reply"
-              data-id="${c.id}" title="Send (Enter)">\u2191</button>
-          </div>
+          ${compose("dt-note-reply-input", "Reply", replyDraft, `data-act="reply" data-id="${c.id}"`)}
         </div>`;
       }
     }
@@ -629,12 +677,8 @@ export function run(cfg: MitkaConfig) {
             <span class="dt-note-tools"><button data-act="cancel" title="Cancel">${CROSS}</button></span>
           </div>
           ${cats(draft.category)}
-          ${draft.image ? `<div class="dt-note-shots">${shot(draft.image, "")}</div>` : ""}
-          <div class="dt-note-foot">
-            <textarea class="dt-note-input" rows="1" placeholder="Comment">${esc(draft.text ?? "")}</textarea>
-            <button class="dt-send${(draft.text ?? "").trim() ? " is-ready" : ""}"
-              data-act="save" title="Send (Enter)">\u2191</button>
-          </div>
+          ${compose("dt-note-input", "Comment", draft.text ?? "", `data-act="save"`,
+            draft.image ? `<div class="dt-note-shots">${shot(draft.image, "")}</div>` : "")}
         </div>`;
     }
     notesOverlay.innerHTML = html;
@@ -677,7 +721,7 @@ export function run(cfg: MitkaConfig) {
      while "show resolved" is off. */
   const renderHistory = (bp: string) => {
     if (history.hidden) return;
-    const mine = notes.filter((n) => (n.breakpoint || "desktop") === bp);
+    const mine = notes.filter((n) => bandOfNote(n) === bp);
     /* Numbered per breakpoint, not by the file's global id: "#3 on tablet" is what
        you actually say out loud, and it stays a short number on every band. Counted
        in creation order, so resolving one does not renumber the rest. */
@@ -728,7 +772,7 @@ export function run(cfg: MitkaConfig) {
        bare icon: it is a label, not a button, and there is nowhere to switch to. */
     const hereIcon = BREAKPOINTS.find((x) => x.id === bp);
     const others = BREAKPOINTS.map((band) => {
-      const here = notes.filter((n) => (n.breakpoint || "desktop") === band.id && stateOf(n) !== "done");
+      const here = notes.filter((n) => bandOfNote(n) === band.id && stateOf(n) !== "done");
       return { band, open: here.filter((n) => stateOf(n) === "open").length, total: here.length };
     }).filter((x) => x.total && x.band.id !== bp);
     const bandChips = others.length
@@ -831,24 +875,27 @@ export function run(cfg: MitkaConfig) {
   const setHistory = (on: boolean) => {
     history.hidden = !on;
     historyBtn.setAttribute("aria-pressed", String(on));
-    localStorage.setItem("dt-history", on ? "1" : "0");
+    persist("dt-history", on ? "1" : "0");
     renderNotes();
   };
   const resolvedBtn = document.querySelector<HTMLButtonElement>(".dt-resolved-btn")!;
-  resolvedBtn.addEventListener("click", () => {
-    showResolved = !showResolved;
-    resolvedBtn.setAttribute("aria-pressed", String(showResolved));
-    localStorage.setItem("dt-resolved", showResolved ? "1" : "0");
+  const setResolved = (on: boolean) => {
+    showResolved = on;
+    resolvedBtn.setAttribute("aria-pressed", String(on));
+    persist("dt-resolved", on ? "1" : "0");
+    tellFrame({ resolved: on }); // the canvas draws its own pins
     renderNotes();
     loadAllNotes(); // the eye hides resolved threads in the page menu too
-  });
+  };
+  resolvedBtn.addEventListener("click", () => setResolved(!showResolved));
   resolvedBtn.setAttribute("aria-pressed", String(showResolved));
 
   historyBtn.addEventListener("click", () => {
+    const open = history.hidden === true;
     // opening the list is also the plainest way into comment mode
-    if (history.hidden && !notesOn) setNotes(true);
-    if (history.hidden) setFold(false); // asking for the panel means asking to read it
-    setHistory(history.hidden === true);
+    if (open && !notesOn) setNotes(true);
+    if (open) setFold(false); // asking for the panel means asking to read it
+    setHistory(open);
   });
 
   const reposition = () => {
@@ -878,7 +925,7 @@ export function run(cfg: MitkaConfig) {
       const st = stateOf(c);
       const t = (tally[c.route ?? ""] ??= { ...zero(), bands: {} });
       t[st]++;
-      const bp = c.breakpoint || "desktop";
+      const bp = bandOfNote(c);
       (t.bands[bp] ??= zero())[st]++;
     }
     /* Every state gets its own chip — one chip for all three hid the only one that is
@@ -943,7 +990,7 @@ export function run(cfg: MitkaConfig) {
     hiRaf = requestAnimationFrame(() => {
       hiRaf = 0;
       const t = e.target as Element;
-      if (draft || t.closest(".devtools, .dt-notes-overlay, .dt-history, .dt-frame")) {
+      if (draft || t.closest(NOT_PINNABLE)) {
         hi.hidden = true;
         return;
       }
@@ -975,9 +1022,10 @@ export function run(cfg: MitkaConfig) {
   /* Capture phase: in comment mode a click is a pin, never a navigation. */
   const onNoteClick = (e: MouseEvent) => {
     const t = e.target as Element;
-    if (t.closest(".devtools, .dt-notes-overlay, .dt-history, .dt-frame")) return;
+    if (t.closest(NOT_PINNABLE)) return;
     e.preventDefault();
     e.stopPropagation();
+    if (swallowClick) { swallowClick = false; return; }
     notesOverlay.hidden = true;
     const el = document.elementFromPoint(e.clientX, e.clientY);
     notesOverlay.hidden = false;
@@ -1038,14 +1086,10 @@ export function run(cfg: MitkaConfig) {
     return c.toDataURL("image/jpeg", 0.85);
   };
 
-  /* Paste a screenshot straight into a comment. Delegated because the textareas are
-     rebuilt on every render, so a listener bound to one would not survive the first
-     keystroke. A draft holds its image until the comment it belongs to exists. */
-  notesOverlay.addEventListener("paste", async (e) => {
-    const file = [...((e as ClipboardEvent).clipboardData?.items ?? [])]
-      .find((i) => i.type.startsWith("image/"))?.getAsFile();
-    if (!file) return; // plain text paste: leave it to the textarea
-    e.preventDefault();
+  /* A screenshot for a comment — pasted, dropped on the card or picked with the clip
+     button. A draft holds its image until the comment it belongs to exists; an open
+     thread files it at once. */
+  const attachImage = async (file: File, card: Element | null) => {
     let dataUrl: string;
     try {
       dataUrl = await shrink(file);
@@ -1054,8 +1098,7 @@ export function run(cfg: MitkaConfig) {
       return;
     }
     if (dataUrl.length > MAX_SHOT) { toast("Screenshot is too large even after shrinking."); return; }
-    const card = (e.target as Element).closest<HTMLElement>(".dt-note");
-    const id = Number(card?.dataset.id);
+    const id = Number((card as HTMLElement | null)?.dataset.id);
     if (!id) { if (draft) { draft.image = dataUrl; renderNotes(); } return; }
     const res = await fetch("/__devbar/comments", {
       method: "PATCH",
@@ -1064,6 +1107,33 @@ export function run(cfg: MitkaConfig) {
     });
     if (!res.ok) { toast(`Screenshot was not saved (${res.status}).`); return; }
     await syncNotes();
+  };
+  const imageIn = (items?: DataTransferItemList | null) =>
+    [...(items ?? [])].find((i) => i.kind === "file" && i.type.startsWith("image/"))?.getAsFile();
+
+  /* Delegated because the textareas are rebuilt on every render, so a listener bound to
+     one would not survive the first keystroke. */
+  notesOverlay.addEventListener("paste", (e) => {
+    const file = imageIn((e as ClipboardEvent).clipboardData?.items);
+    if (!file) return; // plain text paste: leave it to the textarea
+    e.preventDefault();
+    attachImage(file, (e.target as Element).closest(".dt-note"));
+  });
+  notesOverlay.addEventListener("dragover", (e) => {
+    if (!(e.target as Element).closest(".dt-note")) return;
+    e.preventDefault(); // without this the browser opens the file instead
+    (e.target as Element).closest(".dt-note")!.querySelector(".dt-compose")?.setAttribute("data-drop", "");
+  });
+  notesOverlay.addEventListener("dragleave", (e) => {
+    (e.target as Element).closest(".dt-note")?.querySelector(".dt-compose")?.removeAttribute("data-drop");
+  });
+  notesOverlay.addEventListener("drop", (e) => {
+    const card = (e.target as Element).closest(".dt-note");
+    if (!card) return;
+    e.preventDefault();
+    card.querySelector(".dt-compose")?.removeAttribute("data-drop");
+    const file = imageIn(e.dataTransfer?.items);
+    if (file) attachImage(file, card);
   });
 
   /* The box takes the height of its text instead of scrolling inside itself — the card
@@ -1111,6 +1181,14 @@ export function run(cfg: MitkaConfig) {
     const act = btn.dataset.act;
     const id = Number(btn.dataset.id);
     if (!act) { openId = openId === id ? null : id; draft = null; renderNotes(); return; }
+    if (act === "attach") {
+      // a throwaway input: the file picker is the only native way to a file
+      const pick = Object.assign(document.createElement("input"), { type: "file", accept: "image/*" });
+      const card = btn.closest(".dt-note");
+      pick.addEventListener("change", () => { if (pick.files?.[0]) attachImage(pick.files[0], card); });
+      pick.click();
+      return;
+    }
     /* On a draft nothing has been written yet, so the × is a local undo; on a saved
        thread it deletes the file too, through detach() in the store. */
     if (act === "unshot") {
@@ -1183,22 +1261,31 @@ export function run(cfg: MitkaConfig) {
     await syncNotes();
   });
 
-  /* The preview is a second copy of this component. It reads its settings at load,
-     so a toggle out here has to be told, or comment mode looks broken inside. */
+  /* The canvas is a second copy of the bar and has no toolbar of its own: every mode
+     it is in, it was told. */
   const tellFrame = (msg: Record<string, unknown>) => {
     if (!frame.hidden) frameEl.contentWindow?.postMessage({ dt: true, ...msg }, location.origin);
   };
-  /* Once, at setup: it used to be added every time the canvas opened, one more listener
-     per open. Every load of the canvas gets the current state, a navigation inside it too. */
-  frameEl.addEventListener("load", () =>
-    tellFrame({ notes: notesOn && !deviceId, grid: !overlay.hidden, inspect }));
+  /* The copy says `hello` once its listener is up and is answered with the whole state.
+     Answering the iframe's `load` instead raced the copy's own start-up — it fetches
+     its config first — and on a light page `load` won: the message went nowhere, the
+     copy fell back to the modes in storage, and a device preview came up in comment
+     mode, turning every click on the page into a pin. */
+  const frameState = () =>
+    ({ notes: notesOn && !deviceId, grid: !overlay.hidden, inspect, resolved: showResolved });
   addEventListener("message", (e) => {
     if (e.origin !== location.origin || !(e.data as any)?.dt) return;
-    const m = e.data as { notes?: boolean; reload?: boolean; grid?: boolean; inspect?: Inspector; open?: number };
-    if (typeof m.notes === "boolean" && m.notes !== notesOn) setNotes(m.notes);
+    const m = e.data as {
+      hello?: boolean; notes?: boolean; reload?: boolean; grid?: boolean;
+      inspect?: Inspector; open?: number; resolved?: boolean;
+    };
+    if (m.hello && e.source === frameEl.contentWindow) { tellFrame(frameState()); return; }
+    // applied without echo, or the page's own state would bounce straight back to it
+    if (typeof m.notes === "boolean" && m.notes !== notesOn) setNotes(m.notes, false);
     if (typeof m.open === "number") goTo(m.open);
     if (typeof m.grid === "boolean" && m.grid === overlay.hidden) setGrid(m.grid);
     if (typeof m.inspect === "string" && m.inspect !== inspect) setInspect(m.inspect);
+    if (typeof m.resolved === "boolean" && m.resolved !== showResolved) setResolved(m.resolved);
     if (m.reload) { loadNotes(); loadAllNotes(); }
   });
 
@@ -1215,13 +1302,20 @@ export function run(cfg: MitkaConfig) {
     if (inFrame) parent.postMessage({ dt: true, reload: true }, location.origin);
   };
 
-  const setNotes = (on: boolean) => {
+  /* `echo`: tell the page when the copy in the canvas turns the mode on or off itself
+     (Escape in there), but not when it is only doing what the page said. */
+  const setNotes = (on: boolean, echo = true) => {
     notesOn = on;
     notesBtn.setAttribute("aria-pressed", String(on));
-    if (!on) history.hidden = true;
-    localStorage.setItem(NOTES_KEY, on ? "1" : "0");
-    tellFrame({ notes: on });
-    if (inFrame) parent.postMessage({ dt: true, notes: on }, location.origin);
+    /* The panel is the point of the mode, so it comes with it unless you closed it. */
+    if (!on) { history.hidden = true; historyBtn.setAttribute("aria-pressed", "false"); }
+    else if (!inFrame && history.hidden && localStorage.getItem("dt-history") !== "0") {
+      history.hidden = false;
+      historyBtn.setAttribute("aria-pressed", "true");
+    }
+    persist(NOTES_KEY, on ? "1" : "0");
+    tellFrame({ notes: on && !deviceId });
+    if (inFrame && echo) parent.postMessage({ dt: true, notes: on }, location.origin);
     notesOverlay.hidden = !on || !frame.hidden;
     document.documentElement.classList.toggle("dt-noting", on);
     if (on) {
@@ -1237,9 +1331,8 @@ export function run(cfg: MitkaConfig) {
     } else {
       draft = null;
       openId = null;
-      /* The canvas is not a comment tool — it is where you look at a breakpoint, and
-         picking a ruler turns comment mode off. Sending the window back to desktop
-         here tore the canvas down under whichever inspector you had just chosen. */
+      /* The canvas stays where it is: picking an inspector turns comment mode off, and
+         sending the window back to desktop here tore the canvas down under it. */
       document.removeEventListener("click", onNoteClick, true);
       document.removeEventListener("keydown", onNoteKey);
       document.removeEventListener("mousemove", onNoteHover);
@@ -1379,7 +1472,7 @@ export function run(cfg: MitkaConfig) {
     localStorage.setItem(DEVICE_KEY, "");
     /* The widest band has no canvas — it is your own window, which is the honest
        way to view it and the only way to see a truly full-bleed layout. */
-    canvasOn = id !== "desktop";
+    canvasOn = id !== WIDE;
     frameW = canvasOn ? b.ideal : 0;
     bpFilter = canvasOn ? id : null;
     localStorage.setItem(CANVAS_KEY, canvasOn ? "1" : "0");
@@ -1473,37 +1566,53 @@ export function run(cfg: MitkaConfig) {
   const setStudio = (on: boolean) => {
     studioBtn.setAttribute("aria-pressed", String(on));
     document.documentElement.classList.toggle("dt-no-studio", !on);
-    localStorage.setItem(STUDIO_KEY, on ? "1" : "0");
+    persist(STUDIO_KEY, on ? "1" : "0");
   };
   studioBtn.addEventListener("click", () => setStudio(studioBtn.getAttribute("aria-pressed") !== "true"));
   setStudio(localStorage.getItem(STUDIO_KEY) !== "0");
 
   notesBtn.addEventListener("click", () => setNotes(!notesOn));
-  /* Restore the canvas/device the session was left in — without this the saved
-     width and breakpoint were remembered but never applied. */
+
+  /* The tab on top of the bar folds it away below the window edge, for the moments the
+     bar sits on exactly what you are looking at. The tab stays behind to bring it back,
+     and the modes stay as they were. Remembered, like every other switch here. */
+  const bar = document.querySelector<HTMLElement>(".devtools")!;
+  const tab = bar.querySelector<HTMLButtonElement>(".dt-tab")!;
+  const setCollapsed = (on: boolean) => {
+    bar.toggleAttribute("data-collapsed", on);
+    tab.setAttribute("aria-expanded", String(!on));
+    tab.setAttribute("aria-label", on ? "Show the bar" : "Hide the bar");
+    // out of sight, out of the tab order
+    for (const g of bar.querySelectorAll<HTMLElement>(".dt-group")) g.inert = on;
+    if (on) closeMenus();
+    persist("dt-collapsed", on ? "1" : "0");
+  };
+  tab.addEventListener("click", () => setCollapsed(!bar.hasAttribute("data-collapsed")));
+
   if (!inFrame) {
+    setCollapsed(localStorage.getItem("dt-collapsed") === "1");
+    // after the first paint, or a bar remembered folded slides away on every load
+    requestAnimationFrame(() => requestAnimationFrame(() => bar.setAttribute("data-ready", "")));
+    /* Restore the canvas/device the session was left in — without this the saved
+       width and breakpoint were remembered but never applied. */
     for (const b of document.querySelectorAll<HTMLElement>("[data-device]")) {
       b.setAttribute("aria-pressed", String(b.dataset.device === deviceId));
     }
     if (canvasOn || deviceId) applyCanvas();
+    setGrid(localStorage.getItem(KEY) === "1");
+    const savedInspect = localStorage.getItem(INSPECT_KEY) as Inspector | null;
+    if (savedInspect && savedInspect in inspectBtns) setInspect(savedInspect);
+    setNotes(localStorage.getItem(NOTES_KEY) === "1");
   }
-
-  setGrid(localStorage.getItem(KEY) === "1");
-  const savedInspect = localStorage.getItem(INSPECT_KEY) as Inspector | null;
-  if (savedInspect && savedInspect in inspectBtns) setInspect(savedInspect);
-
-  setNotes(localStorage.getItem(NOTES_KEY) === "1");
-  // after setNotes: the panel only exists while the mode is on
-  // the panel is the point of the mode, so it opens with it unless you closed it
-  if (notesOn && localStorage.getItem("dt-history") !== "0") setHistory(true);
   /* Whatever was half-written when the page went away. The pin is redrawn from its
      selector like any saved comment's, so a draft survives HMR the same way sent ones
-     do; an element that no longer exists takes its draft with it. */
+     do; an element that no longer exists takes its draft with it. In the canvas the
+     draft waits for the page to switch comment mode on. */
   try {
     const saved = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
     if (saved?.draft && document.querySelector(saved.draft.selector)) {
       draft = saved.draft;
-      if (!notesOn) setNotes(true); // the sentence is unreachable with the mode off
+      if (!notesOn && !inFrame) setNotes(true); // the sentence is unreachable with the mode off
     }
     if (saved?.reply?.text) {
       replyDraft = saved.reply.text;
@@ -1525,4 +1634,7 @@ export function run(cfg: MitkaConfig) {
     loadAllNotes();
     loadNotes();
   });
+
+  // the copy in the canvas asks the page for its modes, now that it can hear the answer
+  if (inFrame) parent.postMessage({ dt: true, hello: true }, location.origin);
 }

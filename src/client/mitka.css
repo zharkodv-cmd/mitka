@@ -20,6 +20,69 @@
       0 10px 34px rgb(0 0 0 / 0.5);
     font: 500 11px/1 ui-sans-serif, system-ui, sans-serif;
   }
+  .devtools[data-ready] {
+    transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  /* Folded: the bar drops below the window edge and only its tab is left showing. */
+  .devtools[data-collapsed] {
+    transform: translate(-50%, calc(100% + 16px)); /* its own height plus the 16px it floats at */
+  }
+  /* The tab sits on the bar's top edge like a drawer handle. It shows while the bar is
+     hovered and always while the bar is folded; hidden, it takes no clicks, so it never
+     covers the page above the bar. It overlaps the bar by a pixel, so the pointer never
+     crosses a gap on its way up to it. */
+  .dt-tab {
+    position: absolute;
+    bottom: calc(100% - 1px);
+    left: 50%;
+    transform: translateX(-50%);
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 16px;
+    padding: 0;
+    background: #1c1c1e;
+    border: 1px solid rgb(255 255 255 / 0.08);
+    border-bottom: 0;
+    border-radius: 8px 8px 0 0;
+    color: #8e8e93;
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 140ms cubic-bezier(0.22, 1, 0.36, 1), color 140ms;
+  }
+  .devtools:hover .dt-tab,
+  .dt-tab:focus-visible,
+  .devtools[data-collapsed] .dt-tab {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .dt-tab:hover {
+    color: #fff;
+  }
+  .dt-tab:focus-visible {
+    outline: 2px solid #0d99ff;
+    outline-offset: 1px;
+  }
+  .dt-tab svg {
+    display: block;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  /* the chevron points where the bar will go */
+  .devtools[data-collapsed] .dt-tab svg {
+    transform: rotate(180deg);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .devtools[data-ready],
+    .dt-tab svg {
+      transition: none;
+    }
+  }
   .dt-group {
     position: relative;
     display: flex;
@@ -83,15 +146,14 @@
     transition: color 160ms cubic-bezier(0.22, 1, 0.36, 1),
                 background-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
   }
-  /* global.css has `svg { height: auto; max-width: 100% }`, which collapses an icon
-     sized only by its width/height attributes — so the size is set here. */
+  /* A site's `svg { height: auto; max-width: 100% }` collapses an icon sized only by
+     its width/height attributes — so the size is set here. */
   .dt-icon svg,
   .dt-devices summary svg,
   .dt-pages summary svg {
     flex: none;
-    /* global.css declares `svg { max-width: 100%; height: auto }` for content images.
-       On chrome icons that cap resolved against a collapsed containing block and
-       squashed the glyph, so it is lifted here rather than fought with sizes. */
+    /* the same rule's max-width, resolved against a collapsed containing block,
+       squashed the glyph */
     max-width: none;
     width: 15px;
     height: 15px;
@@ -122,11 +184,6 @@
   .dt-icon[hidden] {
     display: none;
   }
-  /* Lit means Sanity editing is live; dark means the overlay is off and nothing on
-     the page is editable. The icon shows the capability, not its absence. */
-  /* Sanity used to be the one yellow tool; it is on by default, so the odd colour
-     read as a warning rather than a state. It takes the same blue as everything
-     else — one pill colour means "this tool is on", nothing more. */
   @media (prefers-reduced-motion: reduce) {
     .dt-icon {
       transition: none;
@@ -176,7 +233,7 @@
      12 above and below it: the rule needs room to read as a divider rather than as an
      underline of the row above. The panel's own 4px inset is cancelled here so the
      rule runs the full frame, then 16 puts the label on the same line as the names
-     under it (the panel's 4 + the row's 12). Spacings from Figma 12852:12743. */
+     under it (the panel's 4 + the row's 12). */
   .dt-pages-group,
   .dt-devices-group {
     margin: 12px -4px;
@@ -249,10 +306,8 @@
     color: #fff;
   }
   /* `.dt-icon svg` above sizes every glyph in the bar to 15px, and the badge sits
-     inside one of those buttons — so my starburst rendered at 15px in a 10px box and
-     hung 5px out of the bottom of the badge (user 2026-09-08: "іконка вилізла, не
-     було такого раніше був чіткий круг"). Same specificity, so this wins on order;
-     the size is stated here rather than left to the svg's own attributes. */
+     inside one of those buttons — the starburst would hang out of its 10px circle.
+     Same specificity, so this wins on order. */
   .dt-notes-count svg {
     display: block;
     width: 8px;
@@ -281,14 +336,6 @@
     overflow: visible;
   }
 
-  /* Breakpoint switcher: the glyph is a rectangle in the device's own proportions,
-     so the row reads as wide -> tall without four icon files. */
-  .dt-bps {
-    display: flex;
-    align-items: center;
-    gap: 0.1rem;
-  }
-
   /* Breakpoint preview: the page reloaded in a narrow iframe, so its own media
      queries fire at that width. Nothing about the outer page is resized. */
   /* `display` beats the UA rule for [hidden], so the attribute needs an explicit
@@ -306,29 +353,33 @@
     position: fixed;
     inset: 0;
     z-index: var(--dt-z);
+    cursor: default;
     display: grid;
     place-items: center;
-    align-content: center;
+    /* the track too, not only the item in it: a device wider than the window is laid
+       out at full size and scaled down after, and a track left at the start edge put
+       the scaled shell off to the right */
+    place-content: center;
     background: #101010;
   }
-  /* In canvas mode the ruler sits above the page and the shell is invisible. */
+  /* A device has one true width: no ruler, no handles. */
   .dt-frame[data-mode="device"] .dt-ruler {
     display: none;
   }
-  /* Mockup mode: the shell is the picture, the iframe sits in its cut-out. */
+  .dt-device {
+    max-height: calc(100vh - 32px);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  /* Device mode: the shell is the mockup picture, the iframe sits in its screen hole.
+     overflow clips the page to the shell — it is taller than the hole. */
   .dt-device[data-frame] {
     position: relative;
     transform-origin: center;
-    background: transparent !important;
-    /* Clips the iframe to the shell: the page is taller than the screen hole, and
-       without this it spilled out below the phone. */
-    overflow: hidden;
-    box-sizing: border-box;
-    padding: 0;
-    background: none;
-    border: 0;
+    max-height: none;
     border-radius: 0;
-    box-shadow: none;
+  }
+  .dt-device[data-frame] iframe {
     max-height: none;
   }
   .dt-shell-img {
@@ -338,127 +389,6 @@
     height: 100%;
     pointer-events: none;
   }
-  .dt-device[data-frame]::before,
-  .dt-device[data-frame]::after,
-  .dt-device[data-frame] .dt-side {
-    display: none;
-  }
-  .dt-device[data-frame] iframe {
-    border-radius: 0;
-    max-height: none;
-  }
-  .dt-device {
-    max-height: calc(100vh - 32px);
-    border-radius: 4px;
-    overflow: hidden;
-  }
-  /* Bezel only for the handheld breakpoints — a desktop preview in a phone shell
-     would be a lie about what you are looking at. */
-  .dt-device[data-device="laptop"] {
-    position: relative;
-    padding: 12px 12px 14px;
-    background: linear-gradient(160deg, #3a3a3c, #1c1c1e 40%);
-    border-radius: 12px 12px 4px 4px;
-    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.14), 0 0 0 1px #000, 0 30px 70px rgb(0 0 0 / 0.6);
-  }
-  .dt-device[data-device="laptop"] iframe {
-    border-radius: 3px;
-  }
-  /* The base: a wider slab under the lid, with the notch of a trackpad lip. */
-  .dt-device[data-device="laptop"]::after {
-    content: "";
-    position: absolute;
-    left: 50%;
-    bottom: -10px;
-    width: calc(100% + 60px);
-    height: 10px;
-    transform: translateX(-50%);
-    background: linear-gradient(#3a3a3c, #232325);
-    border-radius: 0 0 8px 8px;
-    box-shadow: 0 8px 18px rgb(0 0 0 / 0.5);
-  }
-  .dt-device[data-device="phone"],
-  .dt-device[data-device="tablet"] {
-    position: relative;
-    background: linear-gradient(160deg, #3a3a3c, #1c1c1e 40%);
-    box-shadow:
-      inset 0 0 0 1px rgb(255 255 255 / 0.14),
-      0 0 0 1px #000,
-      0 30px 70px rgb(0 0 0 / 0.6);
-  }
-  .dt-device[data-device="phone"] {
-    padding: 12px;
-    border-radius: 44px;
-  }
-  .dt-device[data-device="tablet"] {
-    padding: 16px;
-    border-radius: 26px;
-  }
-  .dt-device[data-device="phone"] iframe {
-    border-radius: 32px;
-  }
-  .dt-device[data-device="tablet"] iframe {
-    border-radius: 12px;
-  }
-  /* Dynamic island / camera, floating over the page like on the device itself. */
-  .dt-device[data-device="phone"]::before {
-    content: "";
-    position: absolute;
-    top: 24px;
-    left: 50%;
-    width: 84px;
-    height: 24px;
-    transform: translateX(-50%);
-    background: #000;
-    border-radius: 12px;
-    pointer-events: none;
-  }
-  .dt-device[data-device="tablet"]::before {
-    content: "";
-    position: absolute;
-    top: 7px;
-    left: 50%;
-    width: 6px;
-    height: 6px;
-    transform: translateX(-50%);
-    background: #000;
-    border-radius: 50%;
-    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.2);
-  }
-  /* Home indicator. */
-  .dt-device[data-device="phone"]::after {
-    content: "";
-    position: absolute;
-    bottom: 20px;
-    left: 50%;
-    width: 120px;
-    height: 4px;
-    transform: translateX(-50%);
-    background: #000;
-    border-radius: 2px;
-    opacity: 0.55;
-    pointer-events: none;
-  }
-  /* Side buttons: two slivers on the shell's edges. */
-  .dt-frame[data-device="phone"] .dt-device {
-    margin-inline: 3px;
-  }
-  .dt-device[data-device="phone"] > .dt-side {
-    position: absolute;
-    width: 3px;
-    background: #2a2a2c;
-    border-radius: 2px;
-  }
-  .dt-device[data-device="phone"] > .dt-side--power {
-    right: -3px;
-    top: 150px;
-    height: 78px;
-  }
-  .dt-device[data-device="phone"] > .dt-side--vol {
-    left: -3px;
-    top: 120px;
-    height: 46px;
-  }
   .dt-frame iframe {
     display: block;
     max-height: calc(100vh - 64px);
@@ -467,6 +397,17 @@
   }
 
   html.dt-in-frame .devtools {
+    display: none;
+  }
+  /* The canvas stands in for a phone or a tablet, whose scrollbars float over the page.
+     A classic one — macOS with a mouse plugged in — took 15px off the width the page
+     laid out at and drew a white strip down the side of the device. */
+  html.dt-in-frame,
+  html.dt-in-frame body {
+    scrollbar-width: none;
+  }
+  html.dt-in-frame::-webkit-scrollbar,
+  html.dt-in-frame body::-webkit-scrollbar {
     display: none;
   }
   html.dt-in-frame astro-dev-toolbar,
@@ -562,17 +503,6 @@
     list-style: none;
     cursor: pointer;
     transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
-  .dt-devices summary::-webkit-details-marker,
-  .dt-pages summary::-webkit-details-marker {
-    display: none;
-  }
-  .dt-devices summary svg,
-  .dt-pages summary svg {
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.5;
-    stroke-linecap: round;
   }
   .dt-devices summary:hover,
   .dt-pages summary:hover,
@@ -707,69 +637,6 @@
     transform: rotate(45deg) translate(-1px, -1px);
   }
 
-  /* The stage holds the canvas between two grab bars, so the handles sit on the
-     canvas edge where you expect them — not at the edge of the window. */
-  .dt-stage {
-    display: flex;
-    align-items: stretch;
-    gap: 6px;
-  }
-  .dt-frame-handle {
-    flex: none;
-    align-self: center;
-    width: 6px;
-    height: 72px;
-    background: rgb(255 255 255 / 0.28);
-    border-radius: 999px;
-    cursor: ew-resize;
-    touch-action: none;
-    transition: background-color 120ms, height 120ms;
-  }
-  .dt-frame[data-mode="device"] .dt-frame-handle {
-    visibility: hidden;
-  }
-  .dt-frame-handle:hover,
-  .dt-frame[data-dragging] .dt-frame-handle {
-    background: #0d99ff;
-    height: 120px;
-  }
-  /* Device menu */
-  .dt-devices {
-    position: relative;
-  }
-  .dt-devices summary,
-  .dt-pages summary {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    height: 28px;
-    padding-inline: 10px;
-    background: rgb(255 255 255 / 0.05);
-    border-radius: 999px;
-    color: #f2f2f7;
-    font: 500 11px/1 ui-sans-serif, system-ui, sans-serif;
-    white-space: nowrap;
-    list-style: none;
-    cursor: pointer;
-    transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
-  .dt-devices summary::-webkit-details-marker,
-  .dt-pages summary::-webkit-details-marker {
-    display: none;
-  }
-  .dt-devices summary svg,
-  .dt-pages summary svg {
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.5;
-    stroke-linecap: round;
-  }
-  .dt-devices summary:hover,
-  .dt-pages summary:hover,
-  .dt-devices[open] summary,
-  .dt-pages[open] summary {
-    background: rgb(255 255 255 / 0.12);
-  }
   .dt-notes-overlay {
     position: fixed;
     inset: 0;
@@ -927,16 +794,22 @@
     background: rgba(255, 0, 0, 0.08);
   }
 
+  /* A window narrower than the bar: it wraps onto two rows rather than hanging off
+     both edges. */
   @media (max-width: 767px) {
     .devtools {
-      bottom: 0.75rem;
-      left: 0.75rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      box-sizing: border-box;
+      width: max-content;
+      max-width: calc(100vw - 24px);
+      border-radius: 24px;
     }
   }
 
   /* Comment-mode pins and cards. These nodes are injected with innerHTML, so they
      carry no Astro scope attribute — scoped rules would never match them. Sizes are
-     in px on purpose: this project scales the root font-size with the viewport, and
+     in px on purpose: a site may scale its root font-size with the viewport, and
      rem here would make the dev UI grow with the design. */
   .dt-pin {
     position: absolute;
@@ -1117,8 +990,8 @@
     margin: 0 4px;
     background: rgb(255 255 255 / 0.14);
   }
-  /* global.css trims every <p> to its cap height with a ::after table so Figma
-     spacing lands 1:1. The dev chrome is not the design — the trim only skews it. */
+  /* A site that trims every <p> to its cap height with a ::after table would skew the
+     card's spacing — the dev chrome is not the design. */
   .dt-msg p::after {
     content: none;
   }
@@ -1158,7 +1031,6 @@
     cursor: help;
   }
 
-  .dt-note-info svg,
   .dt-note-state svg {
     display: block;
     fill: none;
@@ -1221,9 +1093,6 @@
     max-height: 260px;
     padding: 12px 12px 2px;
     overflow-y: auto;
-    /* the page's own scrollbar is light; on a near-black card it read as a white bar */
-    scrollbar-width: thin;
-    scrollbar-color: rgb(255 255 255 / 0.2) transparent;
   }
   .dt-msg + .dt-msg {
     margin-top: 12px;
@@ -1325,52 +1194,82 @@
     border-color: #0d99ff;
   }
   .dt-note-foot {
-    display: flex;
-    align-items: flex-end;
-    gap: 8px;
     padding: 12px;
+  }
+  /* The composer: one field holding the text, the screenshot that goes with it and the
+     actions. Bordered at rest, so it reads as the place to write; blue while you type,
+     and while a file is dragged over the card. */
+  .dt-compose {
+    background: #383838;
+    border: 1px solid rgb(255 255 255 / 0.14);
+    border-radius: 10px;
+    transition: border-color 140ms cubic-bezier(0.22, 1, 0.36, 1),
+                box-shadow 140ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .dt-compose:focus-within,
+  .dt-compose[data-drop] {
+    border-color: #0d99ff;
+    box-shadow: 0 0 0 3px rgb(13 153 255 / 0.2);
+  }
+  .dt-compose .dt-note-shots {
+    margin: 2px 12px 10px;
   }
   .dt-note-input,
   .dt-note-reply-input {
-    flex: 1;
+    display: block;
+    width: 100%;
     box-sizing: border-box;
-    min-height: 34px;
+    min-height: 38px;
     /* no fixed cap: the box takes the height of its text (see grow()). This one only
        stops a very long note from pushing the card past the edge of the screen. */
     max-height: 50vh;
     /* hidden at rest so the very first paint has no bar either; grow() turns it on only
        when the cap above actually clips */
     overflow-y: hidden;
-    padding: 8px 10px;
-    background: #3a3a3a;
+    margin: 0;
+    padding: 10px 12px 6px;
+    background: transparent;
     border: 0;
-    border-radius: 8px;
-    color: #f0f0f0;
-    font: 12px/1.4 ui-sans-serif, system-ui, sans-serif;
+    outline: none;
+    color: #f5f5f7;
+    font: 13px/1.45 ui-sans-serif, system-ui, sans-serif;
     resize: none;
   }
   .dt-note-input::placeholder,
   .dt-note-reply-input::placeholder {
     color: #8b8b8b;
   }
-  .dt-note-input:focus-visible,
-  .dt-note-reply-input:focus-visible {
-    outline: 1px solid #0d99ff;
+  .dt-compose-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px;
+    border-top: 1px solid rgb(255 255 255 / 0.08);
   }
+  .dt-attach,
   .dt-send {
     display: grid;
     place-items: center;
     flex: none;
-    /* the same 34 as the input beside it, so the foot reads as one row */
-    width: 34px;
-    height: 34px;
+    width: 28px;
+    height: 28px;
     padding: 0;
-    background: rgb(255 255 255 / 0.14);
     border: 0;
     border-radius: 50%;
-    color: #f0f0f0;
-    font-size: 14px;
     cursor: pointer;
+    transition: background-color 140ms cubic-bezier(0.22, 1, 0.36, 1), color 140ms;
+  }
+  .dt-attach {
+    background: transparent;
+    color: #9aa0a6;
+  }
+  .dt-attach:hover {
+    background: rgb(255 255 255 / 0.1);
+    color: #fff;
+  }
+  .dt-send {
+    background: rgb(255 255 255 / 0.14);
+    color: #c7c7cc;
   }
   /* Blue once the box has something in it: the button is the only thing telling you
      Enter will send, and a permanently grey circle said nothing either way. */
@@ -1378,6 +1277,20 @@
   .dt-send:hover {
     background: #0d99ff;
     color: #fff;
+  }
+  .dt-attach svg,
+  .dt-send svg {
+    display: block;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .dt-attach:focus-visible,
+  .dt-send:focus-visible {
+    outline: 2px solid #0d99ff;
+    outline-offset: 1px;
   }
 
   /* Comment history: the same threads as the pins, read as a list. Its rows are

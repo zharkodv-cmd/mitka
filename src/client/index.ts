@@ -7,6 +7,10 @@ import { mount } from "./markup";
 import { run } from "./run";
 import { keepAboveModals } from "./toplayer";
 
+// The canvas copy: marked before the config arrives, so its scrollbar and its own bar
+// never paint for a frame.
+if (window.self !== window.top) document.documentElement.classList.add("dt-in-frame");
+
 loadConfig()
   .then((cfg) => {
     document.documentElement.style.setProperty("--dt-z", String(cfg.zIndex));

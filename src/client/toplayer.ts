@@ -2,8 +2,8 @@
 //
 // A modal dialog sits in the top layer above every z-index and makes the rest of
 // the document inert, so the bar could neither paint over it nor take a click —
-// and a modal is exactly the kind of UI that gets reviewed. Measured 2026-09-08
-// (Chromium 151): a popover shown from OUTSIDE the dialog is still under it and
+// and a modal is exactly the kind of UI that gets reviewed. Measured in Chromium
+// 151: a popover shown from OUTSIDE the dialog is still under it and
 // still inert, even when re-shown after the modal. A popover host INSIDE the
 // dialog's subtree is different on both counts: it is not inert, it enters the
 // top layer after the dialog, and — top-layer boxes being positioned from the
