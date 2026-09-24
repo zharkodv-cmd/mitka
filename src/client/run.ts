@@ -4,6 +4,7 @@
 import { categoryOf } from "../store/categories.mjs";
 import { stateOf, STATE_LABEL } from "../store/status.mjs";
 import type { MitkaConfig } from "./config";
+import { DEVTOOLS_DEVICES } from "../devtools-devices.mjs";
 
 export function run(cfg: MitkaConfig) {
   const BREAKPOINTS = cfg.breakpoints;
@@ -328,6 +329,7 @@ export function run(cfg: MitkaConfig) {
   const hiTag = hi.querySelector<HTMLElement>(".dt-hi-tag")!;
   const handles = [...document.querySelectorAll<HTMLElement>(".dt-frame-handle")];
   const sizeBadge = document.querySelector<HTMLElement>(".dt-frame-size")!;
+  const rotateBtn = document.querySelector<HTMLButtonElement>(".dt-frame-rotate")!;
   const frame = document.querySelector<HTMLElement>(".dt-frame")!;
   /* The narrow breakpoints are rendered in an iframe: media queries read the viewport,
      not a container, so shrinking an element on this page would change nothing. Inside
@@ -1359,8 +1361,28 @@ export function run(cfg: MitkaConfig) {
   let canvasOn = localStorage.getItem(CANVAS_KEY) === "1";
   let deviceId = localStorage.getItem(DEVICE_KEY) || "";
   let frameW = Number(localStorage.getItem(W_KEY)) || 0;
+  /* A DevTools device: the canvas at that device's exact size, turned or not. It is the
+     working canvas all the same — comments on, filed under the band the width is in. */
+  const EMU_KEY = "dt-emu";
+  type Emu = { id: string; turned: boolean };
+  let emu: Emu | null = (() => {
+    try { return JSON.parse(localStorage.getItem(EMU_KEY) || "null"); } catch { return null; }
+  })();
+  const emuDevice = () => (emu ? DEVTOOLS_DEVICES.find((d) => d.id === emu!.id) ?? null : null);
+  const emuSize = () => {
+    const d = emuDevice();
+    return d ? (emu!.turned ? { w: d.h, h: d.w } : { w: d.w, h: d.h }) : null;
+  };
+  const setEmu = (next: Emu | null) => {
+    emu = next;
+    persist(EMU_KEY, next ? JSON.stringify(next) : "");
+  };
 
-  const setBadge = (text: string) => { sizeBadge.textContent = text; };
+  const setBadge = (text: string) => {
+    sizeBadge.textContent = text;
+    // the rotate button sits just right of the badge, whatever its length
+    frame.style.setProperty("--dt-badge-w", `${sizeBadge.offsetWidth}px`);
+  };
 
   /* Ruler across the top of the canvas: a tick every 50px, a number every 200, and
      a marked line at each band edge — the widths where the layout actually flips. */
@@ -1390,7 +1412,7 @@ export function run(cfg: MitkaConfig) {
     /* The canvas is already sized to the window's height, so only its width can
        overflow; a device shell can overflow either way. Scaling the canvas on height
        would shrink it for no reason and make the ruler lie. */
-    const k = deviceId
+    const k = deviceId || emu
       ? Math.min(1, (innerWidth - 80) / w, (innerHeight - 120) / h)
       : Math.min(1, (innerWidth - 80) / w);
     device.style.transform = k < 1 ? `scale(${k})` : "";
@@ -1412,6 +1434,8 @@ export function run(cfg: MitkaConfig) {
          button pills, so the panel kept the band you had just left — the half of
          "switching back and forth does nothing" that the bottom of this function
          never saw. */
+      rotateBtn.hidden = true;
+      syncDeviceMenu();
       if (notesOn) loadNotes(); else renderNotes();
       return;
     }
@@ -1439,16 +1463,19 @@ export function run(cfg: MitkaConfig) {
       tellFrame({ notes: false });
       setBadge(`${dev.label} · ${dev.w}\u00d7${dev.h} · viewing only`);
     } else {
-      const w = frameW || BREAKPOINTS.find((b) => b.id === currentBp())!.ideal;
+      const size = emuSize();
+      if (!size) setEmu(null); // a device Chrome has since dropped from its list
+      const w = size?.w || frameW || BREAKPOINTS.find((b) => b.id === currentBp())!.ideal;
       frameW = w;
       frame.dataset.mode = "canvas";
       delete device.dataset.frame;
       shellImg.hidden = true;
       shellImg.removeAttribute("src");
       /* Full height on purpose: the canvas is a working surface, and a short one
-         would hide exactly the sections you are trying to comment on. */
+         would hide exactly the sections you are trying to comment on. A DevTools device
+         is the exception — its height is the point of picking it. */
       device.style.width = `${w}px`;
-      device.style.height = `${innerHeight - 84}px`; // window minus the ruler and the bar
+      device.style.height = `${size?.h ?? innerHeight - 84}px`; // window minus the ruler and the bar
       frameEl.style.position = "";
       frameEl.style.left = frameEl.style.top = "";
       frameEl.style.width = "100%";
@@ -1456,9 +1483,14 @@ export function run(cfg: MitkaConfig) {
       renderRuler(w);
       tellFrame({ notes: notesOn });
       const band = BREAKPOINTS.find((b) => b.id === bpOf(w))!;
-      setBadge(`${w}px \u00b7 ${band.label}`);
+      const named = emuDevice();
+      setBadge(named && size
+        ? `${named.label} \u00b7 ${size.w}\u00d7${size.h} \u00b7 ${band.label}`
+        : `${w}px \u00b7 ${band.label}`);
       bpFilter = bpOf(w);
     }
+    rotateBtn.hidden = !(emuDevice()?.rotates && !dev);
+    syncDeviceMenu();
     fitCanvas();
     syncBpButtons();
     /* Re-read rather than re-render: switching bands is the gesture you reach for
@@ -1470,6 +1502,7 @@ export function run(cfg: MitkaConfig) {
     const b = BREAKPOINTS.find((x) => x.id === id)!;
     deviceId = "";
     localStorage.setItem(DEVICE_KEY, "");
+    setEmu(null);
     /* The widest band has no canvas — it is your own window, which is the honest
        way to view it and the only way to see a truly full-bleed layout. */
     canvasOn = id !== WIDE;
@@ -1487,12 +1520,78 @@ export function run(cfg: MitkaConfig) {
     btn.addEventListener("click", () => {
       deviceId = btn.dataset.device === deviceId ? "" : btn.dataset.device!;
       localStorage.setItem(DEVICE_KEY, deviceId);
-      for (const b of document.querySelectorAll<HTMLElement>("[data-device]")) {
-        b.setAttribute("aria-pressed", String(b.dataset.device === deviceId));
-      }
       devicesMenu.open = false;
       applyCanvas();
     });
+  }
+
+  /* A DevTools row: the canvas at that size. Picking the one already open closes it,
+     back to the window — the same toggle the preview rows have. */
+  for (const btn of document.querySelectorAll<HTMLButtonElement>("[data-emu]")) {
+    btn.addEventListener("click", () => {
+      const again = emu?.id === btn.dataset.emu && !deviceId;
+      deviceId = "";
+      localStorage.setItem(DEVICE_KEY, "");
+      setEmu(again ? null : { id: btn.dataset.emu!, turned: false });
+      canvasOn = !again;
+      frameW = 0;
+      localStorage.setItem(CANVAS_KEY, canvasOn ? "1" : "0");
+      bpFilter = null;
+      openId = null;
+      draft = null;
+      devicesMenu.open = false;
+      applyCanvas();
+    });
+  }
+  rotateBtn.addEventListener("click", () => {
+    if (!emu) return;
+    setEmu({ ...emu, turned: !emu.turned });
+    openId = null;
+    draft = null;
+    applyCanvas();
+  });
+
+  /* Two lists behind one button: Preview (a real frame, looking only) and DevTools
+     (every device Chrome knows, as a working canvas). The tab you were on is kept. */
+  const tabs = [...devicesMenu.querySelectorAll<HTMLButtonElement>("[data-tab]")];
+  const panels = [...devicesMenu.querySelectorAll<HTMLElement>("[data-panel]")];
+  const setTab = (name: string) => {
+    for (const t of tabs) t.setAttribute("aria-selected", String(t.dataset.tab === name));
+    for (const p of panels) p.hidden = p.dataset.panel !== name;
+    persist("dt-devices-tab", name);
+  };
+  for (const t of tabs) t.addEventListener("click", () => setTab(t.dataset.tab!));
+  setTab(localStorage.getItem("dt-devices-tab") === "devtools" ? "devtools" : "preview");
+
+  /* Forty-odd devices: typing narrows the list, and a heading stays only while it
+     still has a row under it. */
+  const search = devicesMenu.querySelector<HTMLInputElement>(".dt-emu-search")!;
+  search.addEventListener("input", () => {
+    const q = search.value.trim().toLowerCase();
+    let heading: HTMLElement | null = null;
+    let any = false;
+    const close = () => { if (heading) heading.hidden = !any; };
+    for (const el of search.parentElement!.children as unknown as HTMLElement[]) {
+      if (el.classList.contains("dt-devices-group")) { close(); heading = el; any = false; continue; }
+      if (!el.dataset.emu) continue;
+      el.hidden = !!q && !el.textContent!.toLowerCase().includes(q);
+      any ||= !el.hidden;
+    }
+    close();
+  });
+
+  /* Which row is open, in both lists, and on the button itself: the menu names the
+     device instead of saying "Device" while one is up. */
+  const devicesName = devicesMenu.querySelector<HTMLElement>(".dt-devices-name")!;
+  function syncDeviceMenu() {
+    for (const b of devicesMenu.querySelectorAll<HTMLElement>("[data-device]")) {
+      b.setAttribute("aria-pressed", String(b.dataset.device === deviceId));
+    }
+    const live = !deviceId && !frame.hidden ? emu?.id : undefined;
+    for (const b of devicesMenu.querySelectorAll<HTMLElement>("[data-emu]")) {
+      b.setAttribute("aria-pressed", String(b.dataset.emu === live));
+    }
+    devicesName.textContent = (deviceId && deviceById(deviceId)?.label) || (live && emuDevice()?.label) || "Device";
   }
 
   /* Dragging either edge, Webflow-style. The width is clamped to the band you are
@@ -1511,6 +1610,8 @@ export function run(cfg: MitkaConfig) {
     handle.addEventListener("pointerdown", (e) => {
       if (deviceId) return; // a device has one true width
       e.preventDefault();
+      // dragging a DevTools device makes it a canvas of your own width, full height
+      if (emu) { setEmu(null); applyCanvas(); }
       handle.setPointerCapture(e.pointerId);
       const startX = e.clientX;
       const startW = frameW;
@@ -1539,6 +1640,7 @@ export function run(cfg: MitkaConfig) {
        layout actually flips, and the ones worth checking. */
     handle.addEventListener("dblclick", () => {
       if (deviceId) return;
+      setEmu(null);
       const b = bandOf(bpFilter ?? currentBp());
       const edges = [b.min || 320, Number.isFinite(b.max) ? b.max : b.ideal];
       frameW = Math.abs(frameW - edges[0]) < Math.abs(frameW - edges[1]) ? edges[0] : edges[1];
@@ -1555,7 +1657,7 @@ export function run(cfg: MitkaConfig) {
     syncBpButtons();
     if (currentBp() !== lastBp) { lastBp = currentBp(); renderNotes(); }
     if (!frame.hidden) {
-      if (!deviceId) device.style.height = `${innerHeight - 84}px`;
+      if (!deviceId && !emu) device.style.height = `${innerHeight - 84}px`;
       fitCanvas();
     }
   });
@@ -1596,10 +1698,8 @@ export function run(cfg: MitkaConfig) {
     requestAnimationFrame(() => requestAnimationFrame(() => bar.setAttribute("data-ready", "")));
     /* Restore the canvas/device the session was left in — without this the saved
        width and breakpoint were remembered but never applied. */
-    for (const b of document.querySelectorAll<HTMLElement>("[data-device]")) {
-      b.setAttribute("aria-pressed", String(b.dataset.device === deviceId));
-    }
     if (canvasOn || deviceId) applyCanvas();
+    else syncDeviceMenu();
     setGrid(localStorage.getItem(KEY) === "1");
     const savedInspect = localStorage.getItem(INSPECT_KEY) as Inspector | null;
     if (savedInspect && savedInspect in inspectBtns) setInspect(savedInspect);

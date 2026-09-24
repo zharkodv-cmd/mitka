@@ -1,5 +1,6 @@
 // The bar's DOM, built once from config. Everything run.ts looks up by class is here.
 import type { MitkaConfig } from "./config";
+import { DEVTOOLS_DEVICES, DEVTOOLS_GROUPS } from "../devtools-devices.mjs";
 
 const esc = (v: string) =>
   v.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]!);
@@ -33,6 +34,16 @@ export function mount(cfg: MitkaConfig) {
       `<p class="dt-devices-group">${esc(g)}</p>` +
       cfg.devices.filter((d) => d.group === g).map((d) =>
         `<button type="button" data-device="${esc(d.id)}" aria-pressed="false">` +
+        `<span class="dt-menu-label">${esc(d.label)}</span><em>${d.w}&times;${d.h}</em></button>`).join(""))
+    .join("");
+
+  /* Chrome DevTools' own device list, by kind. A row opens the canvas at the device's
+     size, so comments written there belong to the band its width falls in. */
+  const emulated = DEVTOOLS_GROUPS
+    .map((g) =>
+      `<p class="dt-devices-group">${esc(g)}</p>` +
+      DEVTOOLS_DEVICES.filter((d) => d.group === g).map((d) =>
+        `<button type="button" data-emu="${esc(d.id)}" aria-pressed="false">` +
         `<span class="dt-menu-label">${esc(d.label)}</span><em>${d.w}&times;${d.h}</em></button>`).join(""))
     .join("");
 
@@ -95,7 +106,21 @@ export function mount(cfg: MitkaConfig) {
         ${icon('<rect x="3" y="4" width="14" height="9" rx="1.5" /><path d="M7 16h6" />')}
         <span class="dt-devices-name">Device</span>
       </summary>
-      <div class="dt-devices-menu">${devices}</div>
+      <div class="dt-devices-menu">
+        <div class="dt-menu-tabs" role="tablist" aria-label="Device lists">
+          <button type="button" role="tab" data-tab="preview" aria-selected="true">Preview</button>
+          <button type="button" role="tab" data-tab="devtools" aria-selected="false">DevTools</button>
+        </div>
+        <div class="dt-menu-panel" role="tabpanel" data-panel="preview">
+          <p class="dt-menu-note">In a real device frame. Looking only: comments are off.</p>
+          ${devices}
+        </div>
+        <div class="dt-menu-panel" role="tabpanel" data-panel="devtools" hidden>
+          <p class="dt-menu-note">Opens the canvas at the device's size. Comments go to its breakpoint.</p>
+          <input class="dt-emu-search" type="search" placeholder="Find a device" aria-label="Find a device" />
+          ${emulated}
+        </div>
+      </div>
     </details>
   </div>
 </div>
@@ -117,6 +142,9 @@ export function mount(cfg: MitkaConfig) {
   </div>
   <div class="dt-ruler"></div>
   <span class="dt-frame-size"></span>
+  <button class="dt-frame-rotate" type="button" hidden title="Rotate">
+    <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M14.5 5.5A6.5 6.5 0 1 0 16.5 10" /><path d="M16.8 3.6v3.4h-3.4" /></svg>
+  </button>
 </div>
 
 <aside class="dt-history" hidden aria-label="Comment history"></aside>

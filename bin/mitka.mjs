@@ -154,6 +154,11 @@ if (cmd === '--selftest') {
   const wrapped = readFileSync(join(dir3, 'astro.config.mjs'), 'utf8');
   assert.match(wrapped, /\} from '\.\/x\.mjs';\nconst mitka = await import\('mitka'\)/, 'lands after a wrapped import, not inside it');
   assert.match(wrapped, /integrations: \[\.\.\.\(mitka \? \[mitka\(\)\] : \[\]\), react\(\)\]/, 'an optional install is wired behind a catch');
+  // the DevTools list: every row usable, ids unique, groups known
+  const { DEVTOOLS_DEVICES, DEVTOOLS_GROUPS } = await import('../src/devtools-devices.mjs');
+  assert.ok(DEVTOOLS_DEVICES.length > 30, 'the DevTools list is there');
+  assert.equal(new Set(DEVTOOLS_DEVICES.map((d) => d.id)).size, DEVTOOLS_DEVICES.length, 'device ids are unique');
+  assert.ok(DEVTOOLS_DEVICES.every((d) => d.w > 0 && d.h > 0 && DEVTOOLS_GROUPS.includes(d.group)), 'every device has a size and a group');
   await rm(dir3, { recursive: true, force: true });
   await rm(dir, { recursive: true, force: true });
   console.log('mitka selftest ok');
