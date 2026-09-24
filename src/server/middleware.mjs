@@ -88,8 +88,8 @@ export function buildConfig({ root, options, routes }) {
   /* A device the client cannot draw would throw on every load it stays selected, so it
      is dropped here and said so — including one still in the pre-0.3 picture shape. */
   const devices = (options.devices ?? DEVICES).filter((d) => {
-    if (SHELLS.includes(d.shell) && BROWSERS.includes(d.browser)) return true;
-    console.warn(`[mitka] device "${d.id}" skipped: it needs shell (${SHELLS.join(', ')}) and browser (${BROWSERS.join(', ')})${d.frame ? '; `frame` pictures were replaced by shell + browser in 0.3' : ''}`);
+    if (d.w > 0 && d.h > 0 && SHELLS.includes(d.shell) && BROWSERS.includes(d.browser)) return true;
+    console.warn(`[mitka] device "${d.id}" skipped: it needs w and h, shell (${SHELLS.join(', ')}) and browser (${BROWSERS.join(', ')})${d.frame ? '; `frame` pictures were replaced by shell + browser in 0.3' : ''}`);
     return false;
   });
   return {

@@ -1,6 +1,6 @@
 {
   "name": "mitka",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "A dev-only toolbar for Astro sites: pinned page comments Claude Code can read and answer, spacing/size/type inspectors in design px, a layout grid, breakpoint canvas and device preview.",
   "keywords": [
     "astro-integration",

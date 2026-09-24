@@ -252,7 +252,9 @@ export function pageTints(doc: Document) {
   const win = doc.defaultView!;
   const clear = (c: string) => !c || rgbaOf(c)[3] === 0;
   const bgRaw = [doc.body, doc.documentElement].map((el) => el && win.getComputedStyle(el).backgroundColor).find((c) => c && !clear(c));
-  const bg = bgRaw ? rgbaOf(bgRaw) : [255, 255, 255, 1];
+  // a see-through page background sits on the browser's white
+  const [br, bgn, bb, ba] = bgRaw ? rgbaOf(bgRaw) : [255, 255, 255, 1];
+  const bg = [br, bgn, bb].map((v) => Math.round(v * ba + 255 * (1 - ba)));
   // a see-through bar is blended over the page, as WebKit does below 75% opacity
   const over = (c: string) => {
     const [r, g, b, a] = rgbaOf(c);

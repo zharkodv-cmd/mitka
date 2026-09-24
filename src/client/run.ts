@@ -1440,7 +1440,7 @@ export function run(cfg: MitkaConfig) {
 
   /* The Dynamic Island where Chrome DevTools puts it for a phone of this size. */
   const cutoutOf = (d: { w: number; h: number }) =>
-    DEVTOOLS_DEVICES.find((x) => x.w === d.w && x.h === d.h && x.cutout)?.cutout;
+    DEVTOOLS_DEVICES.find((x) => x.w === d.w && x.h === d.h && x.cutout?.shape === "pill")?.cutout;
   const frameDoc = () => { try { return frameEl.contentDocument; } catch { return null; } };
   const frameTitle = () => frameDoc()?.title.split("\u2014").pop()?.trim() || "";
 
@@ -1514,6 +1514,10 @@ export function run(cfg: MitkaConfig) {
          never saw. */
       rotateBtn.hidden = true;
       barsBtn.hidden = true;
+      // leaving the canvas means following the real window again
+      bpFilter = null;
+      frameDevice = "";
+      syncBpButtons();
       syncDeviceMenu();
       if (notesOn) loadNotes(); else renderNotes();
       return;
