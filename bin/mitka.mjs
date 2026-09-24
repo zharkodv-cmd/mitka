@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // The comment queue from the terminal — what Claude uses to answer and close threads.
 //
+//   mitka init [--yes]         set the project up: mitka.config.mjs, hooks, .gitignore
 //   mitka                      open comments, newest last
 //   mitka all                  including done ones
 //   mitka done 3 "note"        resolve it as Claude + leave a note
@@ -110,8 +111,58 @@ if (cmd === '--selftest') {
   s2.prune(t2, { date: '2026-01-01' });
   assert.equal(JSON.parse(readFileSync(join(dir2, 'feedback/archive/comments-2026-01-01.json'), 'utf8')).comments.length, 1, 'pruning twice in a day does not double the archive');
   await rm(dir2, { recursive: true, force: true });
+  // a fresh project has no feedback/ yet — the first comment must create it
+  const dir3 = await mkdtemp(join(tmpdir(), 'mitka-fresh-'));
+  createStore(dir3).save({ comments: [] });
+  assert.ok(existsSync(join(dir3, 'feedback/comments.json')), 'the first save creates feedback/');
+  // init: edges into bands, pages into a config that loads
+  const { bandsFrom, scanPages, renderConfig, detectEdges, wireAstroConfig } = await import('./init.mjs');
+  const bands = bandsFrom([480, 992, 768]);
+  assert.deepEqual(bands.map((x) => [x.id, x.min, x.max]),
+    [['desktop', 992, Infinity], ['tablet', 768, 991], ['landscape', 480, 767], ['portrait', 0, 479]],
+    'three edges make the four default bands, whatever order they came in');
+  assert.ok(bands.every((x) => x.ideal >= x.min && x.ideal <= x.max), 'every ideal width sits inside its band');
+  assert.deepEqual(bandsFrom([768]).map((x) => x.id), ['desktop', 'mobile']);
+  const { mkdir, writeFile } = await import('node:fs/promises');
+  await mkdir(join(dir3, 'src/pages/docs'), { recursive: true });
+  await mkdir(join(dir3, 'src/pages/blog'), { recursive: true });
+  await mkdir(join(dir3, 'src/styles'), { recursive: true });
+  await writeFile(join(dir3, 'src/pages/index.astro'), '<Layout title="Site — Home">');
+  await writeFile(join(dir3, 'src/pages/docs/a.astro'), '');
+  await writeFile(join(dir3, 'src/pages/docs/b-c.md'), '');
+  await writeFile(join(dir3, 'src/pages/blog/[slug].astro'), '');
+  await writeFile(join(dir3, 'src/pages/_draft.astro'), '');
+  await writeFile(join(dir3, 'src/styles/a.css'),
+    '@media (max-width: 991px) {}\n@media (max-width: 991.98px) {}\n@media (width >= 48em) {}\n@media (min-width: 768px) {}\n@media (max-width: 1300px) {}');
+  assert.deepEqual(detectEdges(dir3), [992, 768], 'edges used more than once, px and em alike');
+  const scanned = scanPages(dir3);
+  assert.deepEqual(scanned.pages.map((x) => [x.route, x.name, x.group]),
+    [['/', 'Home', 'Pages'], ['/docs/a', 'A', 'Docs'], ['/docs/b-c', 'B c', 'Docs']], 'titles, folders, no partials');
+  assert.deepEqual(scanned.dynamic.map((x) => x.route), ['/blog/[slug]']);
+  await writeFile(join(dir3, 'mitka.config.mjs'), renderConfig({ bands, ...scanned, grid: { container: 'c', grid: 'g', columns: 12 }, sanity: true }));
+  const cfg = await import(join(dir3, 'mitka.config.mjs'));
+  assert.equal(cfg.breakpoints[0].max, Infinity, 'the written config loads');
+  assert.deepEqual(cfg.pages['/docs/a'], ['A', 'Docs']);
+  assert.equal(cfg.sanity, true);
+  await writeFile(join(dir3, 'astro.config.mjs'), "import { defineConfig } from 'astro/config';\nexport default defineConfig({});\n");
+  assert.equal(wireAstroConfig(dir3).status, 'added');
+  assert.match(readFileSync(join(dir3, 'astro.config.mjs'), 'utf8'), /import mitka from 'mitka';[\s\S]*integrations: \[mitka\(\)\]/);
+  assert.equal(wireAstroConfig(dir3).status, 'present', 'a second run leaves it alone');
+  await writeFile(join(dir3, 'astro.config.mjs'),
+    "import {\n  defineConfig,\n} from 'astro/config';\nimport react from '@astrojs/react';\nimport {\n  a,\n  b,\n} from './x.mjs';\n\nexport default defineConfig({ integrations: [react()] });\n");
+  assert.equal(wireAstroConfig(dir3, true).status, 'added');
+  const wrapped = readFileSync(join(dir3, 'astro.config.mjs'), 'utf8');
+  assert.match(wrapped, /\} from '\.\/x\.mjs';\nconst mitka = await import\('mitka'\)/, 'lands after a wrapped import, not inside it');
+  assert.match(wrapped, /integrations: \[\.\.\.\(mitka \? \[mitka\(\)\] : \[\]\), react\(\)\]/, 'an optional install is wired behind a catch');
+  await rm(dir3, { recursive: true, force: true });
   await rm(dir, { recursive: true, force: true });
   console.log('mitka selftest ok');
+  process.exit(0);
+}
+
+if (cmd === 'init') {
+  const { init } = await import('./init.mjs');
+  await init(root, argv);
   process.exit(0);
 }
 
