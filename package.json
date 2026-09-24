@@ -1,9 +1,28 @@
 {
   "name": "mitka",
-  "version": "0.1.9",
-  "description": "Mitka — a dev-only bar for Astro sites: page switcher, layout grid, spacing/size/type inspectors in design px, Figma-style page comments with a CLI for Claude, breakpoint canvas and device preview.",
-  "type": "module",
+  "version": "0.2.0",
+  "description": "A dev-only toolbar for Astro sites: pinned page comments Claude Code can read and answer, spacing/size/type inspectors in design px, a layout grid, breakpoint canvas and device preview.",
+  "keywords": [
+    "astro-integration",
+    "withastro",
+    "astro",
+    "devtools",
+    "design-review",
+    "feedback",
+    "comments",
+    "claude-code"
+  ],
+  "homepage": "https://github.com/zharkodv-cmd/mitka#readme",
+  "bugs": {
+    "url": "https://github.com/zharkodv-cmd/mitka/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zharkodv-cmd/mitka.git"
+  },
   "license": "MIT",
+  "author": "Dmitry Zharko",
+  "type": "module",
   "types": "./types.d.ts",
   "exports": {
     ".": {
