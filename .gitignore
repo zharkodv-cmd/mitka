@@ -1,2 +1,6 @@
 node_modules/
 .DS_Store
+
+# Local only: history backups; a feedback/ store if the bar ever runs with this repo as root
+archive/
+feedback/
