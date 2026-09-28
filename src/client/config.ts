@@ -15,6 +15,7 @@ export type MitkaConfig = {
   devices: Device[];
   categories: Category[];
   sanity: boolean;
+  shortcuts: boolean;
   ignore: string[];
   grid: { container: string; grid: string; columns: number };
   zIndex: number;

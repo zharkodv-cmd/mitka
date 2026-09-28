@@ -1389,7 +1389,13 @@ export function run(cfg: MitkaConfig) {
     const m = e.data as {
       hello?: boolean; notes?: boolean; reload?: boolean; grid?: boolean;
       inspect?: Inspector; open?: number; resolved?: boolean; scrollbar?: string; device?: string;
+      key?: [string, boolean]; closeMenus?: boolean;
     };
+    // a key pressed or a click made inside the canvas, handed up to the bar that owns it
+    if (!inFrame && e.source === frameEl.contentWindow) {
+      if (m.key) { keyFor(m.key[0], m.key[1])?.run(); return; }
+      if (m.closeMenus) { closeMenus(); return; }
+    }
     if (inFrame && typeof m.device === "string") deviceLabel = m.device;
     // Windows draws a scrollbar that takes width; the copy shows one when told to
     if (inFrame && m.scrollbar) document.documentElement.classList.toggle("dt-sb-classic", m.scrollbar === "classic");
@@ -1899,6 +1905,76 @@ export function run(cfg: MitkaConfig) {
     persist("dt-collapsed", on ? "1" : "0");
   };
   tab.addEventListener("click", () => setCollapsed(!bar.hasAttribute("data-collapsed")));
+
+  /* Keys, Figma's way: one key each, no modifier — ⌘, Ctrl and ⌥ stay the browser's
+     and Sanity's (⌥ hides its overlays, ⌘\ toggles them). Matched on the physical key,
+     `code`, so C is C in the Ukrainian layout too, where the letter it types is «с».
+     Never while you type in a field, a form or the Studio. A key presses the bar's own
+     button, so it does exactly what the click does. One table runs the key, writes its
+     hint on the button and fills the list under the keyboard button. */
+  const keysMenu = document.querySelector<HTMLDetailsElement>(".dt-keys")!;
+  const press = (sel: string) => () => bar.querySelector<HTMLElement>(sel)?.click();
+  const pageStep = (by: number) => () => {
+    const links = [...document.querySelectorAll<HTMLAnchorElement>(".dt-pages a")];
+    links[links.findIndex((a) => a.hasAttribute("aria-current")) + by]?.click();
+  };
+  type Key = { group: string; code: string; shift?: boolean; hint: string; label: string; el?: string; run: () => void };
+  const KEYS: Key[] = [
+    { group: "Comments", code: "KeyC", hint: "C", label: "Comment mode", el: ".dt-notes-btn", run: press(".dt-notes-btn") },
+    { group: "Comments", code: "KeyC", shift: true, hint: "⇧C", label: "Comments panel", el: ".dt-history-btn", run: press(".dt-history-btn") },
+    { group: "Comments", code: "KeyR", hint: "R", label: "Show resolved", el: ".dt-resolved-btn", run: press(".dt-resolved-btn") },
+    { group: "Inspect", code: "KeyG", hint: "G", label: "Grid", el: ".dt-grid-btn", run: press(".dt-grid-btn") },
+    { group: "Inspect", code: "KeyP", hint: "P", label: "Spacing", el: ".dt-pad-btn", run: press(".dt-pad-btn") },
+    { group: "Inspect", code: "KeyS", hint: "S", label: "Size", el: ".dt-size-btn", run: press(".dt-size-btn") },
+    { group: "Inspect", code: "KeyT", hint: "T", label: "Typography", el: ".dt-type-btn", run: press(".dt-type-btn") },
+    ...(cfg.sanity ? [{ group: "Inspect", code: "KeyE", hint: "E", label: "Sanity overlay", el: ".dt-studio-btn", run: press(".dt-studio-btn") }] : []),
+    // the bands in the order the bar shows them, however many the project has
+    ...bpBtns.slice(0, 9).map((b, i) => ({
+      group: "Breakpoints", code: `Digit${i + 1}`, hint: String(i + 1), label: b.dataset.tip ?? b.title,
+      el: `.dt-bp[data-bp="${b.dataset.bp}"]`, run: () => b.click(),
+    })),
+    { group: "View", code: "KeyD", hint: "D", label: "Devices", run: () => { devicesMenu.open = !devicesMenu.open; } },
+    { group: "View", code: "BracketLeft", hint: "[", label: "Previous page", run: pageStep(-1) },
+    { group: "View", code: "BracketRight", hint: "]", label: "Next page", run: pageStep(1) },
+    { group: "View", code: "Backslash", hint: "\\", label: "Hide the bar", run: () => tab.click() },
+    { group: "View", code: "Slash", shift: true, hint: "?", label: "This list", el: ".dt-keys summary", run: () => { keysMenu.open = !keysMenu.open; } },
+  ];
+  const keyFor = (code: string, shift: boolean) => KEYS.find((k) => k.code === code && !k.shift === !shift);
+  const typing = (t: EventTarget | null) =>
+    t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+  if (cfg.shortcuts) {
+    for (const k of KEYS) {
+      const el = k.el && bar.querySelector<HTMLElement>(k.el);
+      if (!el) continue;
+      el.dataset.tip = `${el.dataset.tip ?? k.label} · ${k.hint}`;
+      el.setAttribute("aria-keyshortcuts", k.hint.startsWith("⇧") ? `Shift+${k.hint.slice(1)}` : k.hint);
+    }
+    const row = (label: string, hint: string) =>
+      `<div class="dt-key-row"><span>${esc(label)}</span><kbd>${esc(hint)}</kbd></div>`;
+    keysMenu.querySelector(".dt-keys-menu")!.innerHTML =
+      `<p class="dt-menu-note">One key, no modifier, in any keyboard layout. Not while you type.</p>` +
+      [...new Set(KEYS.map((k) => k.group))].map((g) => `<p class="dt-devices-group">${g}</p>` +
+        KEYS.filter((k) => k.group === g).map((k) => row(k.label, k.hint)).join("")).join("") +
+      `<p class="dt-devices-group">In a comment</p>` +
+      row("Send", "Enter") + row("New line", "⇧Enter") + row("Close, cancel, back out", "Esc");
+
+    document.addEventListener("keydown", (e) => {
+      if (e.repeat || e.isComposing || e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented || typing(e.target)) return;
+      const k = keyFor(e.code, e.shiftKey);
+      if (!k) return;
+      e.preventDefault();
+      // the copy in the canvas has no bar of its own: the page runs the key
+      if (inFrame) parent.postMessage({ dt: true, key: [e.code, e.shiftKey] }, location.origin);
+      else k.run();
+    });
+    /* A menu opened by a key while you work in the canvas never sees the window lose
+       focus — it already had — so a click or Esc in there closes it from inside. */
+    if (inFrame) {
+      const shut = () => parent.postMessage({ dt: true, closeMenus: true }, location.origin);
+      document.addEventListener("pointerdown", shut, true);
+      document.addEventListener("keydown", (e) => { if (e.key === "Escape") shut(); });
+    }
+  }
 
   if (!inFrame) {
     setCollapsed(localStorage.getItem("dt-collapsed") === "1");

@@ -206,7 +206,8 @@
      native bar came out white and full width over black. color-scheme repaints it in
      one line — no custom ::-webkit- track to maintain — and `thin` trims it. */
   .dt-pages ul,
-  .dt-devices-menu {
+  .dt-devices-menu,
+  .dt-keys-menu {
     color-scheme: dark;
     scrollbar-width: thin;
     scrollbar-color: rgb(255 255 255 / 0.22) transparent;
@@ -1096,7 +1097,8 @@
     height: 120px;
   }
   /* Device menu */
-  .dt-devices {
+  .dt-devices,
+  .dt-keys {
     position: relative;
   }
   .dt-devices summary,
@@ -1121,7 +1123,8 @@
   .dt-pages[open] summary {
     background: rgb(255 255 255 / 0.12);
   }
-  .dt-devices-menu {
+  .dt-devices-menu,
+  .dt-keys-menu {
     position: absolute;
     right: 0;
     bottom: calc(100% + 10px);
@@ -1134,6 +1137,42 @@
     box-shadow: 0 12px 40px rgb(0 0 0 / 0.55);
     overflow-y: auto;
     overscroll-behavior: contain;
+  }
+  /* Shortcuts: an icon like the tools it lists, lit while its list is open — the list
+     is the devices menu's panel with a key where the device's width would be. */
+  .dt-keys summary {
+    list-style: none;
+  }
+  .dt-keys summary::-webkit-details-marker {
+    display: none;
+  }
+  .dt-keys[open] summary {
+    color: #fff;
+    background: #0d99ff;
+  }
+  /* the hint would sit on top of the list it names */
+  .dt-keys[open] summary::after {
+    display: none;
+  }
+  .dt-key-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 4px 12px;
+    color: #d1d1d6;
+    font: 500 11px/1.3 ui-sans-serif, system-ui, sans-serif;
+  }
+  .dt-key-row kbd {
+    flex: none;
+    min-width: 12px;
+    padding: 2px 5px;
+    background: rgb(255 255 255 / 0.08);
+    border: 1px solid rgb(255 255 255 / 0.12);
+    border-radius: 4px;
+    color: #f2f2f7;
+    font: 500 10px/1.2 ui-monospace, monospace;
+    text-align: center;
   }
   /* Preview | DevTools: a segmented control at the top of the menu, not two more rows. */
   .dt-menu-tabs {

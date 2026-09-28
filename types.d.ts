@@ -44,6 +44,8 @@ export interface MitkaOptions {
   groups?: string[];
   /** show the toggle that hides Sanity's visual-editing overlay */
   sanity?: boolean;
+  /** single-key shortcuts (C, G, 1–5…) and their list in the bar; `false` turns both off */
+  shortcuts?: boolean;
   /** extra selectors the inspectors and comment picker must ignore */
   ignore?: string[];
   /** class names the grid overlay borrows from the project's own layout */

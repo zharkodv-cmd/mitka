@@ -180,6 +180,10 @@ if (cmd === '--selftest') {
   const wrapped = readFileSync(join(dir3, 'astro.config.mjs'), 'utf8');
   assert.match(wrapped, /\} from '\.\/x\.mjs';\nconst mitka = await import\('mitka'\)/, 'lands after a wrapped import, not inside it');
   assert.match(wrapped, /integrations: \[\.\.\.\(mitka \? \[mitka\(\)\] : \[\]\), react\(\)\]/, 'an optional install is wired behind a catch');
+  // shortcuts: on unless a project switches them off
+  const { buildConfig } = await import('../src/server/middleware.mjs');
+  assert.equal(buildConfig({ root: dir3, options: {}, routes: [] }).shortcuts, true, 'keys are on by default');
+  assert.equal(buildConfig({ root: dir3, options: { shortcuts: false }, routes: [] }).shortcuts, false, 'and can be switched off');
   // the preview shelf: every device drawable
   const { DEVICES, SHELLS, BROWSERS } = await import('../src/presets.mjs');
   assert.ok(DEVICES.every((d) => d.w > 0 && d.h > 0 && SHELLS.includes(d.shell) && BROWSERS.includes(d.browser)), 'every preview device has a size, a body and a browser');

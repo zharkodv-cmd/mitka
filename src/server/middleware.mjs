@@ -99,6 +99,8 @@ export function buildConfig({ root, options, routes }) {
     devices,
     categories: CATEGORIES,
     sanity: Boolean(options.sanity),
+    // on unless switched off: a site with letter keys of its own (a video player) needs the way out
+    shortcuts: options.shortcuts !== false,
     ignore: options.ignore ?? [],
     grid: { container: 'container', grid: 'grid', columns: 12, ...options.grid },
     // Above everything a page can produce, Astro's own dev toolbar (2000000010)

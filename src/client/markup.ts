@@ -122,6 +122,13 @@ export function mount(cfg: MitkaConfig) {
         </div>
       </div>
     </details>
+    <!-- the list is written by the script, from the same table that runs the keys -->
+    <details class="dt-keys" name="dt-menu"${cfg.shortcuts ? "" : " hidden"}>
+      <summary class="dt-icon" title="Shortcuts">
+        ${icon('<rect x="2" y="5" width="16" height="10" rx="2" /><path d="M5.5 8.5h.01M8.5 8.5h.01M11.5 8.5h.01M14.5 8.5h.01M6.5 12h7" />')}
+      </summary>
+      <div class="dt-keys-menu"></div>
+    </details>
   </div>
 </div>
 

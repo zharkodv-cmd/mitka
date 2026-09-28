@@ -16,6 +16,10 @@ It exists only under `astro dev`. Nothing of it reaches a build.
 - **Comments** — Figma-style pins: threads, four tags, screenshots (paste, drop or pick)
   that go with the message they were sent with, your own messages editable, a half-written
   comment kept as a draft pin when you close it. Filed per page and per breakpoint.
+- **Keys** — one key per tool, Figma-style: `C` comments, `⇧C` panel, `R` resolved, `G` grid,
+  `P`/`S`/`T` inspectors, `E` Sanity, `1`–`9` breakpoints, `D` devices, `[` `]` pages, `\` hide
+  the bar, `?` the list (also behind the keyboard button). Physical keys, so any layout works;
+  never while you type; inside the canvas too.
 - **Breakpoints** — the page in a canvas at a band's width; drag either edge inside the
   band. Comments written there belong to that band.
 - **Devices** — two lists behind one button. *Preview*: the eight screens most visitors
@@ -153,6 +157,7 @@ export const zIndex = 2000000020;            // the bar's base layer
 | `grid` | `container` / `grid` / 12 | classes of your own layout the overlay reuses |
 | `devices` | the eight above | the preview shelf: `{ id, label, group, w, h, shell, browser, note? }` — `shell`: `island` `home` `punch` `tablet` `macbook` `laptop` `monitor`; `browser`: `safari-ios` `chrome-android` `safari-ipad` `safari-mac` `chrome-windows`; `note` is the row's tooltip. Before 0.3 a device had a `frame` picture; such an entry is skipped with a warning |
 | `sanity` | `false` | show the Sanity overlay toggle. Sanity's visual editing takes any iframe for Studio's Presentation and swallows clicks on CMS text there — in the canvas, tabs and buttons stop working. Skip its island inside the bar's frame: `window.frameElement?.closest('.dt-frame')` |
+| `shortcuts` | `true` | single-key shortcuts and their list in the bar; `false` for a site with letter keys of its own (a video player) |
 | `ignore` | `[]` | selectors the inspectors and comment picker skip |
 | `zIndex` | `2000000020` | above Astro's dev toolbar and any app modal |
 
