@@ -184,12 +184,19 @@ export function mitkaMiddleware({ root, options, routes }) {
       return json(res, c, 201);
     }
     if (req.method === 'PATCH') {
-      const { id, reply: replyText, image, removeImage, ...changes } = await readJson(req);
+      const { id, reply: replyText, image, removeImage, edit, ...changes } = await readJson(req);
       const db = store.load();
-      if (image) store.attach(db, id, image);
-      if (removeImage) store.detach(db, id, removeImage);
-      // A reply from the browser is always yours; Claude's come through the CLI.
+      // before anything else is touched: a refused edit writes nothing, its removals included
+      if (edit && !(edit.text?.trim() && store.edit(db, id, edit.at ?? null, edit.text.trim()))) {
+        return json(res, { error: `no message of yours to edit in #${id}` }, 404);
+      }
+      // A reply from the browser is always yours; Claude's come through the CLI. It is
+      // written before its screenshot is filed: a screenshot belongs to the last message
+      // older than it (threadOf), so this order is what puts it under its own reply.
       if (replyText?.trim()) store.reply(db, id, 'you', replyText.trim());
+      if (image) store.attach(db, id, image);
+      // one name from older clients, a list from an edit that dropped several
+      for (const name of [].concat(removeImage || [])) store.detach(db, id, name);
       const c = Object.keys(changes).length || !replyText
         ? store.patch(db, id, changes)
         : db.comments.find((x) => x.id === Number(id));

@@ -56,6 +56,20 @@ export function reply(db, id, author, text) {
   return c;
 }
 
+/**
+ * Your own words, changed after sending: the comment itself (`at` null) or one of your
+ * replies, found by when it was written — an index would shift under a reply that
+ * arrived while you were editing. Claude's messages are not yours to rewrite.
+ */
+export function edit(db, id, at, text) {
+  const c = db.comments.find((x) => x.id === Number(id));
+  const m = at ? c?.replies?.find((r) => r.at === at && r.author === 'you') : c;
+  if (!m) return null;
+  m.text = text;
+  c.updatedAt = new Date().toISOString();
+  return c;
+}
+
 export function patch(db, id, changes) {
   const c = db.comments.find((x) => x.id === Number(id));
   if (!c) return null;
@@ -168,5 +182,5 @@ export function createStore(root) {
     return true;
   };
 
-  return { root, file, imageDir, archiveDir, archiveImageDir, load, save, attach, detach, remove, add, patch, reply, nextId, prune };
+  return { root, file, imageDir, archiveDir, archiveImageDir, load, save, attach, detach, remove, add, patch, reply, edit, nextId, prune };
 }

@@ -13,8 +13,9 @@ It exists only under `astro dev`. Nothing of it reaches a build.
 - **Spacing · Size · Typography** — hover an element for its padding, margin and gap,
   its size, or its type (size, line height and letter spacing the way Figma states them,
   colour by token name). Values are *design* px: actual px ÷ the root font scale.
-- **Comments** — Figma-style pins: threads, four tags, screenshots (paste, drop or pick),
-  filed per page and per breakpoint.
+- **Comments** — Figma-style pins: threads, four tags, screenshots (paste, drop or pick)
+  that go with the message they were sent with, your own messages editable, a half-written
+  comment kept as a draft pin when you close it. Filed per page and per breakpoint.
 - **Breakpoints** — the page in a canvas at a band's width; drag either edge inside the
   band. Comments written there belong to that band.
 - **Devices** — two lists behind one button. *Preview*: the eight screens most visitors
@@ -151,7 +152,7 @@ export const zIndex = 2000000020;            // the bar's base layer
 | `groups` | by folder | group order |
 | `grid` | `container` / `grid` / 12 | classes of your own layout the overlay reuses |
 | `devices` | the eight above | the preview shelf: `{ id, label, group, w, h, shell, browser, note? }` — `shell`: `island` `home` `punch` `tablet` `macbook` `laptop` `monitor`; `browser`: `safari-ios` `chrome-android` `safari-ipad` `safari-mac` `chrome-windows`; `note` is the row's tooltip. Before 0.3 a device had a `frame` picture; such an entry is skipped with a warning |
-| `sanity` | `false` | show the Sanity overlay toggle |
+| `sanity` | `false` | show the Sanity overlay toggle. Sanity's visual editing takes any iframe for Studio's Presentation and swallows clicks on CMS text there — in the canvas, tabs and buttons stop working. Skip its island inside the bar's frame: `window.frameElement?.closest('.dt-frame')` |
 | `ignore` | `[]` | selectors the inspectors and comment picker skip |
 | `zIndex` | `2000000020` | above Astro's dev toolbar and any app modal |
 

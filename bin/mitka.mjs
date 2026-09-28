@@ -20,7 +20,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { createStore, add, patch, reply, nextId, stateOf, STATE_LABEL } from '../src/store/comments.mjs';
+import { createStore, add, patch, reply, edit, nextId, stateOf, STATE_LABEL } from '../src/store/comments.mjs';
+import { threadOf } from '../src/store/thread.mjs';
 
 const argv = process.argv.slice(2);
 const rootFlag = argv.indexOf('--root');
@@ -64,6 +65,16 @@ if (cmd === '--selftest') {
   assert.equal(t.comments[0].replies.length, 2, 'thread keeps both sides in order');
   assert.equal(t.comments[0].replies[0].author, 'you');
   assert.equal(reply(t, 99, 'you', 'x'), null, 'reply to a missing comment reports');
+  const e = { comments: [{ id: 7, text: 'one', replies: [
+    { author: 'you', text: 'уточнення', at: '2026-01-01T10:05:00.000Z' },
+    { author: 'claude', text: 'зрозумів', at: '2026-01-01T10:09:00.000Z' },
+  ] }] };
+  assert.equal(edit(e, 7, null, 'one, reworded').text, 'one, reworded', 'the comment itself can be reworded');
+  edit(e, 7, '2026-01-01T10:05:00.000Z', 'уточнення, точніше');
+  assert.equal(e.comments[0].replies[0].text, 'уточнення, точніше', 'a reply is found by when it was written');
+  assert.equal(edit(e, 7, '2026-01-01T10:09:00.000Z', 'x'), null, 'my replies are not yours to edit');
+  assert.equal(edit(e, 7, 'no such time', 'x'), null, 'an unknown reply reports');
+  assert.equal(edit(e, 99, null, 'x'), null, 'a missing comment reports');
   assert.equal(a.browser, '', 'no browser given stores empty, not undefined');
   assert.equal(a.device, '', 'no device given stores empty');
   assert.equal(add(t, { route: '/', selector: 'x', rx: 0, ry: 0, text: 'y', device: 'iPhone SE' }).device, 'iPhone SE', 'the device a note was written on is kept');
@@ -88,6 +99,19 @@ if (cmd === '--selftest') {
   assert.equal(s.detach(t, 1, rel), true);
   assert.ok(!existsSync(join(dir, rel)), 'detaching deletes the file');
   assert.equal(s.remove(t, 99), false, 'removing a missing id reports rather than throws');
+  // a screenshot shows under the message it was sent with, not loose at the end
+  const shotAt = (iso) => `feedback/images/1-${Date.parse(iso)}.png`;
+  const msgs = threadOf({
+    text: 'hero', createdAt: '2026-01-01T10:00:00.000Z',
+    replies: [
+      { author: 'you', text: 'в мене ось так', at: '2026-01-01T10:05:00.000Z' },
+      { author: 'claude', text: 'дивлюсь', at: '2026-01-01T10:09:00.000Z' },
+    ],
+    images: [shotAt('2026-01-01T10:00:00.004Z'), shotAt('2026-01-01T10:05:00.000Z'), 'feedback/images/odd.png'],
+  });
+  assert.deepEqual(msgs.map((m) => m.images.length), [2, 1, 0], 'each shot sits under the message it followed');
+  assert.deepEqual(msgs[1].images, [shotAt('2026-01-01T10:05:00.000Z')], 'a shot filed in the same ms as its reply is that reply\'s');
+  assert.equal(msgs[0].images[1], 'feedback/images/odd.png', 'a name with no stamp falls back to the comment itself');
   s.save(t);
   assert.equal(s.load().comments.length, t.comments.length, 'save then load round-trips');
   // prune: resolved threads leave, open ones stay, numbering carries on
@@ -266,8 +290,10 @@ for (const c of list) {
   const by = STATE_LABEL[stateOf(c)].toLowerCase();
   console.log(`  #${seq.get(c.id)} (id ${c.id}) [${by}] [${c.breakpoint || 'desktop'}${c.device ? ` · ${c.device}` : ''}]${c.browser ? ` [${c.browser}]` : ''} [${c.category || 'general'}] ${c.text}`);
   if (c.label) console.log(`       on: ${c.label}`);
-  for (const img of c.images || []) console.log(`       img: ${img}`);
-  if (c.note) console.log(`       me: ${c.note}`);
-  for (const r of c.replies || []) console.log(`       ${r.author === 'claude' ? 'me' : 'you'}: ${r.text}`);
+  // each screenshot under the message it came with, as the panel shows it
+  threadOf(c).forEach((m, i) => {
+    if (i) console.log(`       ${m.author === 'claude' ? 'me' : 'you'}: ${m.text}`);
+    for (const img of m.images) console.log(`       img: ${img}`);
+  });
 }
 console.log(`\n${list.length} shown / ${db.comments.length} total`);

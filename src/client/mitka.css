@@ -1524,6 +1524,22 @@
     background: #f0f0f0;
     color: #1a1a1a;
   }
+  /* Put away: the pencil says "not sent yet" where a saved pin says nothing. */
+  .dt-pin--draft svg {
+    display: block;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+  }
+  .dt-note-draft {
+    flex: none;
+    padding: 2px 6px;
+    background: rgb(255 255 255 / 0.1);
+    border-radius: 4px;
+    color: #c7c7cc;
+    font: 600 10px/1.2 ui-sans-serif, system-ui, sans-serif;
+  }
 
   .dt-note {
     position: absolute;
@@ -1772,6 +1788,55 @@
     align-items: baseline;
     gap: 6px;
   }
+  /* Edit, on your own messages only. Shown at rest, dimmed: a control that waits for the
+     pointer is one nobody finds. */
+  .dt-msg-edit {
+    align-self: center;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    margin-left: auto;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 50%;
+    color: #8b8b8b;
+    cursor: pointer;
+  }
+  .dt-msg-edit:hover {
+    background: rgb(255 255 255 / 0.1);
+    color: #fff;
+  }
+  .dt-msg-edit:focus-visible,
+  .dt-edit-cancel:focus-visible {
+    outline: 2px solid #0d99ff;
+    outline-offset: 1px;
+  }
+  .dt-msg-edit svg {
+    display: block;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+  }
+  .dt-msg .dt-compose {
+    margin-top: 6px;
+  }
+  .dt-edit-cancel {
+    height: 28px;
+    padding: 0 10px;
+    background: transparent;
+    border: 0;
+    border-radius: 14px;
+    color: #c7c7cc;
+    font: 12px/1 ui-sans-serif, system-ui, sans-serif;
+    cursor: pointer;
+  }
+  .dt-edit-cancel:hover {
+    background: rgb(255 255 255 / 0.1);
+    color: #fff;
+  }
   /* The head is metadata, the body is the message: the message wins. Head drops to
      11px grey, the text goes up to 13px near-white with a looser line — at 12px
      #e4e4e4 on #2c2c2c the two lines read as one grey block. */
@@ -1812,12 +1877,17 @@
     gap: 6px;
     margin: 10px 12px 0;
   }
+  /* Under a message the thread's own padding already sets the edge: flush with the text
+     above it, not 12px in. */
+  .dt-msg .dt-note-shots {
+    margin: 8px 0 0;
+  }
   .dt-shot {
     position: relative;
     display: inline-flex;
   }
-  /* Figma shows this on hover; keyboard focus gets it too, or the control would be
-     unreachable without a mouse. */
+  /* Always shown: it only exists on a picture in a box you are writing or editing, and
+     one that appeared only under the pointer went unnoticed. */
   .dt-shot-rm {
     position: absolute;
     top: 4px;
@@ -1832,13 +1902,7 @@
     border-radius: 50%;
     color: #f0f0f0;
     cursor: pointer;
-    opacity: 0;
-    transition: opacity 120ms cubic-bezier(0.22, 1, 0.36, 1),
-                background-color 120ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
-  .dt-shot:hover .dt-shot-rm,
-  .dt-shot-rm:focus-visible {
-    opacity: 1;
+    transition: background-color 120ms cubic-bezier(0.22, 1, 0.36, 1);
   }
   .dt-shot-rm:hover {
     background: #e5484d;
@@ -1885,7 +1949,8 @@
     margin: 2px 12px 10px;
   }
   .dt-note-input,
-  .dt-note-reply-input {
+  .dt-note-reply-input,
+  .dt-note-edit-input {
     display: block;
     width: 100%;
     box-sizing: border-box;
@@ -1906,7 +1971,8 @@
     resize: none;
   }
   .dt-note-input::placeholder,
-  .dt-note-reply-input::placeholder {
+  .dt-note-reply-input::placeholder,
+  .dt-note-edit-input::placeholder {
     color: #8b8b8b;
   }
   .dt-compose-bar {

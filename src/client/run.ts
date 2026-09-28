@@ -3,6 +3,7 @@
 // charge: the copy never reads the modes from storage, it asks (see `hello`).
 import { categoryOf } from "../store/categories.mjs";
 import { stateOf, STATE_LABEL } from "../store/status.mjs";
+import { threadOf } from "../store/thread.mjs";
 import type { MitkaConfig } from "./config";
 import { DEVTOOLS_DEVICES } from "../devtools-devices.mjs";
 import { drawDevice, pageTints, inkFor } from "./devices";
@@ -366,6 +367,21 @@ export function run(cfg: MitkaConfig) {
      the textareas: picking a category or pasting a screenshot used to wipe the sentence
      you were in the middle of. */
   let replyDraft = "";
+  /* The screenshot waiting in the reply box, sent with the reply the way a new
+     comment's is. It used to be filed the moment it was pasted, with no text, and
+     drew under whoever wrote last — usually me. */
+  let replyImage = "";
+  /* The message being edited — the comment itself (`at` null) or one of your replies —
+     with its text as it stands and the screenshots struck out so far. Nothing is written
+     until Save, so Cancel puts everything back. */
+  let edit: { id: number; at: string | null; text: string; drop: string[] } | null = null;
+  /* A draft with something in it is work. Closing its card, the mode or opening another
+     thread puts it away — pinned where you left it, marked as a draft — instead of
+     throwing it out; only the bin discards one. An empty draft just goes. One draft at a
+     time: a click on the page while one is put away brings it back. */
+  let draftShut = false;
+  const draftHasWork = () => Boolean(draft && (draft.text?.trim() || draft.image));
+  const putDraftAway = () => { if (draftHasWork()) draftShut = true; else draft = null; };
   /* Which thread that half-typed reply belongs to. Checked at render rather than at
      each of the six places openId changes, so no path can carry one thread's text into
      another's box. */
@@ -503,6 +519,7 @@ export function run(cfg: MitkaConfig) {
      the font's own weight, so they never lined up with the drawn icons beside them.
      Same viewBox, same 13px, same stroke as the rest. */
   const TICK = `<svg viewBox="0 0 20 20" width="13" height="13" aria-hidden="true"><path d="M4.8 10.4 8.2 13.8l7-7.6" stroke-linejoin="round"/></svg>`;
+  const PENCIL = `<svg viewBox="0 0 20 20" width="12" height="12" aria-hidden="true"><path d="M12.6 4.4l3 3-8.4 8.4H4.2v-3z" stroke-linejoin="round"/></svg>`;
   const CROSS = `<svg viewBox="0 0 20 20" width="13" height="13" aria-hidden="true"><path d="M5.4 5.4l9.2 9.2M14.6 5.4l-9.2 9.2"/></svg>`;
   /* My starburst, not a tick: I never close a thread, I only say I did the work, and
      the two have to look different or "handled" and "agreed" become the same mark. */
@@ -537,17 +554,18 @@ export function run(cfg: MitkaConfig) {
 
   /* One thumbnail with its remove badge. The badge sits inside the picture rather than
      overlapping its corner: the thread scrolls in its own box, and anything hanging
-     outside a thumbnail would be clipped by that container on the first scroll. */
-  const shot = (src: string, rm: string) =>
+     outside a thumbnail would be clipped by that container on the first scroll. No
+     `rm`, no badge: a sent screenshot is removed by editing its message. */
+  const shot = (src: string, rm?: string) =>
     `<span class="dt-shot"><a href="${src}" target="_blank"
       ><img src="${src}" alt="" loading="lazy" /></a
-      ><button class="dt-shot-rm" data-act="unshot" ${rm} aria-label="Remove screenshot">${XMARK}</button></span>`;
+      >${rm === undefined ? "" : `<button class="dt-shot-rm" data-act="unshot" ${rm} aria-label="Remove screenshot">${XMARK}</button>`}</span>`;
 
   const shots = (paths: string[] = [], id?: number) =>
     !paths.length ? "" : `<div class="dt-note-shots">${paths.map((p) => {
       const name = p.split("/").pop()!;
       const src = `/__devbar/image?name=${encodeURIComponent(name)}`;
-      return shot(src, `data-id="${id}" data-img="${esc(name)}"`);
+      return shot(src, id === undefined ? undefined : `data-id="${id}" data-img="${esc(name)}"`);
     }).join("")}</div>`;
 
   const CLIP = `<svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="2"/><circle cx="7.5" cy="8.5" r="1.4"/><path d="m3.5 14.5 4-4 3 3 2-2 4 4"/></svg>`;
@@ -602,7 +620,8 @@ export function run(cfg: MitkaConfig) {
   const renderNotes = () => {
     keepDraft();
     syncBpButtons();
-    if (openId !== replyFor) { replyDraft = ""; replyFor = openId; }
+    if (openId !== replyFor) { replyDraft = ""; replyImage = ""; replyFor = openId; }
+    if (edit && edit.id !== openId) edit = null;
     const bp0 = activeBp();
     renderBadge(bp0);
     if (!notesOn) { notesOverlay.innerHTML = ""; return; }
@@ -635,12 +654,7 @@ export function run(cfg: MitkaConfig) {
             st === "done" ? "\u2713" : st === "claude" ? CLAUDE_MARK(11) : ""}</button>`;
       }
       if (openId === c.id) {
-        type Msg = { author: string; text: string; at?: string | null };
-        const thread: Msg[] = [
-          { author: "you", text: c.text, at: c.createdAt },
-          ...(c.note ? [{ author: "claude", text: c.note, at: c.updatedAt }] : []),
-          ...(c.replies ?? []),
-        ];
+        const thread: { author: string; text: string; at?: string | null; images: string[] }[] = threadOf(c);
         html += `<div class="dt-note${orphan ? " dt-note--orphan" : ""}" data-id="${c.id}"
           style="left:${at.x}px;top:${at.y}px">
           <div class="dt-note-bar">
@@ -660,13 +674,27 @@ export function run(cfg: MitkaConfig) {
           ${orphan ? `<p class="dt-note-orphan">The element this was pinned to is not on the page right now.</p>` : ""}
           ${cats(categoryOf(c.category).id, c.id)}
           <div class="dt-note-thread">
-            ${thread.map((m) => `<div class="dt-msg">
-              <div class="dt-msg-head"><b>${m.author === "claude" ? "Claude" : "You"}</b><time>${stamp(m.at)}</time></div>
-              <p>${esc(m.text)}</p>
-            </div>`).join("")}
-            ${shots(c.images, c.id)}
+            ${thread.map((m, i) => {
+              /* Yours can be edited — the comment and your replies; mine cannot. The
+                 comment is keyed by null, a reply by when it was written (see edit()). */
+              const key = i === 0 ? null : m.at ?? null;
+              const mine = m.author === "you";
+              const editing = mine && edit?.id === c.id && edit.at === key;
+              const head = `<div class="dt-msg-head"><b>${mine ? "You" : "Claude"}</b><time>${stamp(m.at)}</time>${
+                mine && !editing ? `<button class="dt-msg-edit" data-act="edit" data-id="${c.id}" data-at="${esc(key ?? "")}" title="Edit">${PENCIL}</button>` : ""}</div>`;
+              if (!editing) return `<div class="dt-msg">${head}<p>${esc(m.text)}</p>${shots(m.images)}</div>`;
+              return `<div class="dt-msg">${head}<div class="dt-compose">
+                <textarea class="dt-note-edit-input" rows="1">${esc(edit!.text)}</textarea>
+                ${shots(m.images.filter((p) => !edit!.drop.includes(p.split("/").pop()!)), c.id)}
+                <div class="dt-compose-bar">
+                  <button class="dt-edit-cancel" data-act="edit-cancel">Cancel</button>
+                  <button class="dt-send${edit!.text.trim() ? " is-ready" : ""}" data-act="edit-save" title="Save (Enter)">${TICK}</button>
+                </div>
+              </div></div>`;
+            }).join("")}
           </div>
-          ${compose("dt-note-reply-input", "Reply", replyDraft, `data-act="reply" data-id="${c.id}"`)}
+          ${compose("dt-note-reply-input", "Reply", replyDraft, `data-act="reply" data-id="${c.id}"`,
+            replyImage ? `<div class="dt-note-shots">${shot(replyImage, "")}</div>` : "")}
         </div>`;
       }
     }
@@ -675,12 +703,19 @@ export function run(cfg: MitkaConfig) {
       const r = el?.getBoundingClientRect();
       const x = r ? r.left + r.width * draft.rx : 0;
       const y = r ? r.top + r.height * draft.ry : 0;
-      html += `<span class="dt-pin dt-pin--draft" style="left:${x}px;top:${y}px;--cat:${categoryOf(draft.category).color}"></span>
-        <div class="dt-note" style="left:${x}px;top:${y}px">
+      html += draftShut
+        ? `<button class="dt-pin dt-pin--draft" data-draft data-act="draft-open" style="left:${x}px;top:${y}px"
+            title="Draft, not sent — click to finish it">${PENCIL}</button>`
+        : `<span class="dt-pin dt-pin--draft" data-draft style="left:${x}px;top:${y}px"></span>
+        <div class="dt-note" data-draft style="left:${x}px;top:${y}px">
           <div class="dt-note-bar">
             <span class="dt-note-el">${esc(elName(draft.tag, draft.classes))}</span>
             ${onIcon(draft.label)}
-            <span class="dt-note-tools"><button data-act="cancel" title="Cancel">${CROSS}</button></span>
+            ${draftHasWork() ? `<span class="dt-note-draft">Draft</span>` : ""}
+            <span class="dt-note-tools">
+              <button data-act="discard" title="Discard this draft">${TRASH}</button>
+              <button data-act="cancel" title="Close — the draft stays">${CROSS}</button>
+            </span>
           </div>
           ${cats(draft.category)}
           ${compose("dt-note-input", "Comment", draft.text ?? "", `data-act="save"`,
@@ -696,7 +731,7 @@ export function run(cfg: MitkaConfig) {
       if (r.right > innerWidth - 8) card.dataset.flipx = "1";
     }
     renderHistory(bp);
-    for (const box of notesOverlay.querySelectorAll<HTMLTextAreaElement>(".dt-note-input, .dt-note-reply-input")) grow(box);
+    for (const box of notesOverlay.querySelectorAll<HTMLTextAreaElement>(".dt-note-input, .dt-note-reply-input, .dt-note-edit-input")) grow(box);
     const fresh = notesOverlay.querySelector<HTMLTextAreaElement>(".dt-note-input");
     if (fresh) { fresh.focus(); fresh.setSelectionRange(fresh.value.length, fresh.value.length); }
   };
@@ -719,6 +754,15 @@ export function run(cfg: MitkaConfig) {
       el.style.visibility = "";
       el.style.left = `${a.x}px`;
       el.style.top = `${a.y}px`;
+    }
+    // the draft too, put away or open, placed the way renderNotes places it
+    const d = draft;
+    const r = d && document.querySelector(d.selector)?.getBoundingClientRect();
+    for (const el of notesOverlay.querySelectorAll<HTMLElement>("[data-draft]")) {
+      if (!d || !r) { el.style.visibility = "hidden"; continue; }
+      el.style.visibility = "";
+      el.style.left = `${r.left + r.width * d.rx}px`;
+      el.style.top = `${r.top + r.height * d.ry}px`;
     }
   };
   /* The history is the same data as the pins, read as a list: every thread on this
@@ -865,7 +909,7 @@ export function run(cfg: MitkaConfig) {
      the page itself, or the canvas when one is open. */
   const goTo = (id: number) => {
     openId = id;
-    draft = null;
+    putDraftAway();
     renderNotes();
     const c = notes.find((n) => n.id === id);
     /* Centre the pin, not the element it hangs on. `scrollIntoView` centres the whole
@@ -1020,7 +1064,8 @@ export function run(cfg: MitkaConfig) {
   const onNoteKey = (e: KeyboardEvent) => {
     if (e.key !== "Escape" || e.isComposing) return;
     e.preventDefault();
-    if (draft) { draft = null; renderNotes(); return; }
+    if (edit) { edit = null; renderNotes(); return; }
+    if (draft && !draftShut) { putDraftAway(); renderNotes(); return; }
     if (openId !== null) { openId = null; renderNotes(); return; }
     setNotes(false);
   };
@@ -1032,6 +1077,13 @@ export function run(cfg: MitkaConfig) {
     e.preventDefault();
     e.stopPropagation();
     if (swallowClick) { swallowClick = false; return; }
+    if (draftHasWork()) {
+      draftShut = false;
+      openId = null;
+      renderNotes();
+      toast("Send or discard this draft first.");
+      return;
+    }
     notesOverlay.hidden = true;
     const el = document.elementFromPoint(e.clientX, e.clientY);
     notesOverlay.hidden = false;
@@ -1093,8 +1145,8 @@ export function run(cfg: MitkaConfig) {
   };
 
   /* A screenshot for a comment — pasted, dropped on the card or picked with the clip
-     button. A draft holds its image until the comment it belongs to exists; an open
-     thread files it at once. */
+     button. It waits in the box, a new comment's or a reply's, and goes with the text
+     when you send. */
   const attachImage = async (file: File, card: Element | null) => {
     let dataUrl: string;
     try {
@@ -1104,15 +1156,13 @@ export function run(cfg: MitkaConfig) {
       return;
     }
     if (dataUrl.length > MAX_SHOT) { toast("Screenshot is too large even after shrinking."); return; }
-    const id = Number((card as HTMLElement | null)?.dataset.id);
-    if (!id) { if (draft) { draft.image = dataUrl; renderNotes(); } return; }
-    const res = await fetch("/__devbar/comments", {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ id, image: dataUrl }),
-    });
-    if (!res.ok) { toast(`Screenshot was not saved (${res.status}).`); return; }
-    await syncNotes();
+    if (!Number((card as HTMLElement | null)?.dataset.id)) {
+      if (draft) { draft.image = dataUrl; renderNotes(); }
+      return;
+    }
+    replyImage = dataUrl;
+    renderNotes();
+    focusEnd(".dt-note-reply-input"); // a draft's box is refocused by the render itself
   };
   const imageIn = (items?: DataTransferItemList | null) =>
     [...(items ?? [])].find((i) => i.kind === "file" && i.type.startsWith("image/"))?.getAsFile();
@@ -1142,6 +1192,19 @@ export function run(cfg: MitkaConfig) {
     if (file) attachImage(file, card);
   });
 
+  /* Every render rebuilds the boxes, so one you were typing in has to be handed its
+     cursor back — at the end, where you left off. */
+  const focusEnd = (sel: string) => {
+    const box = notesOverlay.querySelector<HTMLTextAreaElement>(sel);
+    box?.focus();
+    box?.setSelectionRange(box.value.length, box.value.length);
+  };
+  /* The thread scrolls in a 260px box, and an edited message low in it had its Cancel
+     and Save cut off below the fold: bring the whole field in, not just the text. */
+  const focusEdit = () => {
+    focusEnd(".dt-note-edit-input");
+    notesOverlay.querySelector(".dt-msg .dt-compose")?.scrollIntoView({ block: "nearest" });
+  };
   /* The box takes the height of its text instead of scrolling inside itself — the card
      grows with what you write, the way Figma's does. `auto` first, or scrollHeight only
      ever reports the tallest the box has been. */
@@ -1156,14 +1219,15 @@ export function run(cfg: MitkaConfig) {
     box.style.overflowY = box.scrollHeight > box.clientHeight ? "auto" : "hidden";
   };
   notesOverlay.addEventListener("input", (e) => {
-    const box = (e.target as Element).closest<HTMLTextAreaElement>(".dt-note-input, .dt-note-reply-input");
+    const box = (e.target as Element).closest<HTMLTextAreaElement>(".dt-note-input, .dt-note-reply-input, .dt-note-edit-input");
     if (!box) return;
     if (box.classList.contains("dt-note-input")) { if (draft) draft.text = box.value; }
+    else if (box.classList.contains("dt-note-edit-input")) { if (edit) edit.text = box.value; }
     else replyDraft = box.value;
     keepDraft();
     /* Blue the moment there is something to send, grey while the box is empty — the
        one place the card says whether Enter will do anything. */
-    box.closest(".dt-note")?.querySelector(".dt-send")
+    box.closest(".dt-compose")?.querySelector(".dt-send")
       ?.classList.toggle("is-ready", box.value.trim() !== "");
     grow(box);
   });
@@ -1173,12 +1237,13 @@ export function run(cfg: MitkaConfig) {
      ever listened for it; a comment is one line more often than not, so plain Enter is
      the key that belongs here. */
   notesOverlay.addEventListener("keydown", (e) => {
-    const box = (e.target as Element).closest<HTMLTextAreaElement>(".dt-note-input, .dt-note-reply-input");
+    const box = (e.target as Element).closest<HTMLTextAreaElement>(".dt-note-input, .dt-note-reply-input, .dt-note-edit-input");
     if (!box) return;
     // isComposing: mid-IME Enter picks a candidate, it does not end the sentence
     if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
     e.preventDefault();
-    box.closest(".dt-note")?.querySelector<HTMLButtonElement>(".dt-send")?.click();
+    // its own box's button: while you edit, the card holds two
+    box.closest(".dt-compose")?.querySelector<HTMLButtonElement>(".dt-send")?.click();
   });
 
   notesOverlay.addEventListener("click", async (e) => {
@@ -1186,7 +1251,7 @@ export function run(cfg: MitkaConfig) {
     if (!btn) return;
     const act = btn.dataset.act;
     const id = Number(btn.dataset.id);
-    if (!act) { openId = openId === id ? null : id; draft = null; renderNotes(); return; }
+    if (!act) { openId = openId === id ? null : id; putDraftAway(); renderNotes(); return; }
     if (act === "attach") {
       // a throwaway input: the file picker is the only native way to a file
       const pick = Object.assign(document.createElement("input"), { type: "file", accept: "image/*" });
@@ -1195,19 +1260,45 @@ export function run(cfg: MitkaConfig) {
       pick.click();
       return;
     }
-    /* On a draft nothing has been written yet, so the × is a local undo; on a saved
-       thread it deletes the file too, through detach() in the store. */
+    /* A screenshot still waiting in a box is simply dropped. A sent one shows its × only
+       in the message you are editing, and is struck out there until Save. */
     if (act === "unshot") {
-      if (!id) { if (draft) { delete draft.image; renderNotes(); } return; }
-      await fetch("/__devbar/comments", {
+      if (!id) { if (draft) delete draft.image; else replyImage = ""; }
+      else if (edit) edit.drop.push(btn.dataset.img!);
+      renderNotes();
+      if (edit) focusEdit(); // Enter still saves
+      return;
+    }
+    if (act === "edit") {
+      const c = notes.find((n) => n.id === id);
+      const at = btn.dataset.at || null;
+      const text = at ? c?.replies?.find((r) => r.at === at)?.text : c?.text;
+      if (text === undefined) return;
+      edit = { id, at, text, drop: [] };
+      renderNotes();
+      focusEdit();
+      return;
+    }
+    if (act === "edit-cancel") { edit = null; renderNotes(); return; }
+    if (act === "edit-save") {
+      const was = edit;
+      if (!was) return;
+      const text = was.text.trim();
+      if (!text) { notesOverlay.querySelector<HTMLTextAreaElement>(".dt-note-edit-input")?.focus(); return; }
+      edit = null;
+      const res = await fetch("/__devbar/comments", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id, removeImage: btn.dataset.img }),
+        body: JSON.stringify({ id: was.id, edit: { at: was.at, text }, ...(was.drop.length ? { removeImage: was.drop } : {}) }),
       });
+      // back into the box rather than lose the rewording
+      if (!res.ok) { edit = was; toast(`Edit was not saved (${res.status}).`); }
       await syncNotes();
       return;
     }
-    if (act === "cancel") { draft = null; renderNotes(); return; }
+    if (act === "cancel") { putDraftAway(); renderNotes(); return; }
+    if (act === "discard") { draft = null; draftShut = false; renderNotes(); return; }
+    if (act === "draft-open") { draftShut = false; openId = null; renderNotes(); return; }
     if (act === "close") { openId = null; renderNotes(); return; }
     /* On a draft the tag is not written anywhere yet, so it is a local edit; on a
        saved thread it is a patch like any other. */
@@ -1224,8 +1315,9 @@ export function run(cfg: MitkaConfig) {
     }
     if (act === "save") {
       const text = notesOverlay.querySelector<HTMLTextAreaElement>(".dt-note-input")!.value.trim();
-      if (!text || !draft) { draft = null; renderNotes(); return; }
-      await fetch("/__devbar/comments", {
+      if (!draft) return;
+      if (!text) { notesOverlay.querySelector<HTMLTextAreaElement>(".dt-note-input")?.focus(); return; }
+      const res = await fetch("/__devbar/comments", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -1236,7 +1328,10 @@ export function run(cfg: MitkaConfig) {
           viewport: { w: innerWidth, h: innerHeight },
         }),
       });
+      // the draft stays where it is rather than vanish with the failed write
+      if (!res.ok) { toast(`Comment was not saved (${res.status}).`); return; }
       draft = null;
+      draftShut = false;
       await syncNotes();
       return;
     }
@@ -1244,12 +1339,16 @@ export function run(cfg: MitkaConfig) {
       const box = notesOverlay.querySelector<HTMLTextAreaElement>(".dt-note-reply-input")!;
       const text = box.value.trim();
       if (!text) { box.focus(); return; }
+      const image = replyImage;
       replyDraft = "";
-      await fetch("/__devbar/comments", {
+      replyImage = "";
+      const res = await fetch("/__devbar/comments", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id, reply: text }),
+        body: JSON.stringify({ id, reply: text, ...(image && { image }) }),
       });
+      // put it back in the box rather than lose what you wrote
+      if (!res.ok) { replyDraft = text; replyImage = image; toast(`Reply was not sent (${res.status}).`); }
       await syncNotes();
       return;
     }
@@ -1344,7 +1443,10 @@ export function run(cfg: MitkaConfig) {
       sizer.observe(document.body);
       loadNotes();
     } else {
-      draft = null;
+      /* Put away, not dropped: turning the mode back on brings the card back open —
+         you were in the middle of it. */
+      putDraftAway();
+      draftShut = false;
       openId = null;
       /* The canvas stays where it is: picking an inspector turns comment mode off, and
          sending the window back to desktop here tore the canvas down under it. */
@@ -1617,7 +1719,7 @@ export function run(cfg: MitkaConfig) {
     localStorage.setItem(CANVAS_KEY, canvasOn ? "1" : "0");
     localStorage.setItem(W_KEY, String(frameW));
     openId = null;
-    draft = null;
+    putDraftAway();
     applyCanvas();
   };
   for (const b of bpBtns) b.addEventListener("click", () => pickBp(b.dataset.bp!));
@@ -1644,7 +1746,7 @@ export function run(cfg: MitkaConfig) {
       localStorage.setItem(CANVAS_KEY, canvasOn ? "1" : "0");
       bpFilter = null;
       openId = null;
-      draft = null;
+      putDraftAway();
       devicesMenu.open = false;
       applyCanvas();
     });
@@ -1653,7 +1755,7 @@ export function run(cfg: MitkaConfig) {
     if (!emu) return;
     setEmu({ ...emu, turned: !emu.turned });
     openId = null;
-    draft = null;
+    putDraftAway();
     applyCanvas();
   });
 
