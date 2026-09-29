@@ -2170,12 +2170,28 @@
     overflow-y: auto;
   }
   .dt-hist-row {
+    position: relative;
     display: flex;
     align-items: flex-start;
     border-radius: 8px;
   }
   .dt-hist-row:hover {
     background: rgb(255 255 255 / 0.06);
+  }
+  /* The card's status controls, over the row's top-right corner rather than in a
+     column of their own: a column would take its width from every row's text for a
+     control you only reach on hover. The #n line they cover is short. Shown the way
+     the bin beside them is. */
+  .dt-hist-tools {
+    position: absolute;
+    top: 5px;
+    right: 28px;
+    opacity: 0;
+    transition: opacity 140ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .dt-hist-row:hover .dt-hist-tools,
+  .dt-hist-tools:focus-within {
+    opacity: 1;
   }
   .dt-hist-go {
     display: flex;

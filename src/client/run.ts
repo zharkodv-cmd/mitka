@@ -605,6 +605,22 @@ export function run(cfg: MitkaConfig) {
   const stateMark = (st: string, id: number) =>
     st !== "claude" ? "" : `<button class="dt-note-state" data-act="reopen" data-id="${id}"
       title="Resolved by Claude \u2014 click to clear">${CLAUDE_MARK(13)}</button>`;
+  /* The status controls — my mark and the tick — drawn the same in a card and in a
+     panel row, so a thread can be settled from the list without opening it. */
+  const statusTools = (st: string, id: number) => {
+    const done = st === "done";
+    return `${stateMark(st, id)}<button data-act="${done ? "reopen" : "done"}" data-id="${id}"
+      class="dt-note-resolve${done ? " is-on" : ""}" title="${
+        done ? "Reopen" : st === "claude" ? "Looks right \u2014 mark it resolved" : "Resolve"
+      }">${TICK}</button>`;
+  };
+  /* Resolved by you, or back to open: the one write both of those controls make. */
+  const setStatus = (id: number, done: boolean) =>
+    fetch("/__devbar/comments", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(done ? { id, status: "done", doneBy: "you" } : { id, status: "open", doneBy: null }),
+    });
 
   const esc = (v: string) =>
     v.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]!);
@@ -667,11 +683,7 @@ export function run(cfg: MitkaConfig) {
             <span class="dt-note-el">${esc(elName(c.tag, c.classes))}</span>
             ${onIcon(c.label)}
             <span class="dt-note-tools">
-              ${stateMark(st, c.id)}
-              <button data-act="${done ? "reopen" : "done"}" data-id="${c.id}"
-                class="dt-note-resolve${done ? " is-on" : ""}" title="${
-                  done ? "Reopen" : st === "claude" ? "Looks right \u2014 mark it resolved" : "Resolve"
-                }">${TICK}</button>
+              ${statusTools(st, c.id)}
               <i class="dt-note-sep"></i>
               <button data-act="rm" data-id="${c.id}" title="Delete this thread">${TRASH}</button>
               <button data-act="close" data-id="${c.id}" title="Close">${CROSS}</button>
@@ -822,6 +834,7 @@ export function run(cfg: MitkaConfig) {
               ? ` \u00b7 ${replies} repl${replies === 1 ? "y" : "ies"}` : ""}</span>
           </span>
         </button>
+        <span class="dt-note-tools dt-hist-tools">${statusTools(st, c.id)}</span>
         <button class="dt-hist-rm" data-rm="${c.id}" title="Delete this comment">${TRASH}</button>
       </div>`;
     };
@@ -899,6 +912,13 @@ export function run(cfg: MitkaConfig) {
     }
     const band = (e.target as Element).closest<HTMLButtonElement>(".dt-hist-bands [data-bp]");
     if (band) { pickBp(band.dataset.bp!); return; }
+    /* Settled from the list: the row stays where it is, only its group changes. */
+    const tool = (e.target as Element).closest<HTMLButtonElement>(".dt-hist-tools [data-act]");
+    if (tool) {
+      await setStatus(Number(tool.dataset.id), tool.dataset.act === "done");
+      await syncNotes();
+      return;
+    }
     const kill = (e.target as Element).closest<HTMLButtonElement>("[data-rm]");
     if (kill) {
       await fetch(`/__devbar/comments?id=${kill.dataset.rm}`, { method: "DELETE" });
@@ -1380,13 +1400,7 @@ export function run(cfg: MitkaConfig) {
     if (act === "rm") {
       await fetch(`/__devbar/comments?id=${id}`, { method: "DELETE" });
     } else {
-      await fetch("/__devbar/comments", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(act === "done"
-          ? { id, status: "done", doneBy: "you" }
-          : { id, status: "open", doneBy: null }),
-      });
+      await setStatus(id, act === "done");
     }
     openId = null;
     await syncNotes();
