@@ -834,8 +834,8 @@ export function run(cfg: MitkaConfig) {
               ? ` \u00b7 ${replies} repl${replies === 1 ? "y" : "ies"}` : ""}</span>
           </span>
         </button>
-        <span class="dt-note-tools dt-hist-tools">${statusTools(st, c.id)}</span>
-        <button class="dt-hist-rm" data-rm="${c.id}" title="Delete this comment">${TRASH}</button>
+        <span class="dt-note-tools dt-hist-tools">${statusTools(st, c.id)}<i class="dt-note-sep"></i
+          ><button data-rm="${c.id}" title="Delete this comment">${TRASH}</button></span>
       </div>`;
     };
     /* The same chips the page menu carries, for this route: which bands still hold

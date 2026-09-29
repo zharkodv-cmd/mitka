@@ -2178,20 +2178,31 @@
   .dt-hist-row:hover {
     background: rgb(255 255 255 / 0.06);
   }
-  /* The card's status controls, over the row's top-right corner rather than in a
-     column of their own: a column would take its width from every row's text for a
-     control you only reach on hover. The #n line they cover is short. Shown the way
-     the bin beside them is. */
+  /* The card's controls on a small panel of their own, riding the row's top edge the
+     way a chat's message toolbar does: loose icons on the row's fill read as part of
+     its text. Up on the edge, it covers only the short #n line and the gap above it —
+     inside the row, a long first line ran under it. Not a column: that would take its
+     width from every row's text for something you only reach on hover. */
   .dt-hist-tools {
     position: absolute;
-    top: 5px;
-    right: 28px;
+    top: -8px;
+    right: 8px;
+    z-index: 1;
+    padding: 2px;
+    background: #1e1e1e;
+    border: 1px solid rgb(255 255 255 / 0.12);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgb(0 0 0 / 0.4);
     opacity: 0;
     transition: opacity 140ms cubic-bezier(0.22, 1, 0.36, 1);
   }
   .dt-hist-row:hover .dt-hist-tools,
   .dt-hist-tools:focus-within {
     opacity: 1;
+  }
+  /* Destructive: grey like its neighbours until you are on it. */
+  .dt-hist-tools [data-rm]:hover {
+    color: #e5484d;
   }
   .dt-hist-go {
     display: flex;
@@ -2206,37 +2217,6 @@
     font: inherit;
     text-align: left;
     cursor: pointer;
-  }
-  /* Destructive, so it stays out of the way until you are on the row — and it is a
-     sibling of the jump button, never nested inside it. */
-  .dt-hist-rm {
-    flex: none;
-    display: grid;
-    place-items: center;
-    width: 26px;
-    align-self: stretch;
-    padding: 0;
-    background: transparent;
-    border: 0;
-    border-radius: 8px;
-    color: #8e8e93;
-    cursor: pointer;
-    opacity: 0;
-    transition: opacity 140ms cubic-bezier(0.22, 1, 0.36, 1), color 140ms;
-  }
-  .dt-hist-row:hover .dt-hist-rm,
-  .dt-hist-rm:focus-visible {
-    opacity: 1;
-  }
-  .dt-hist-rm:hover {
-    color: #e5484d;
-  }
-  .dt-hist-rm svg {
-    display: block;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.4;
-    stroke-linecap: round;
   }
   /* Where this page's threads live, band by band. Same chips as the page menu, but
      these switch the canvas to that band. */
