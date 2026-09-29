@@ -176,17 +176,18 @@ export function mitkaMiddleware({ root, options, routes }) {
       return json(res, { comments: route ? db.comments.filter((c) => c.route === route) : db.comments });
     }
     if (req.method === 'POST') {
-      const { image, ...body } = await readJson(req);
+      const { image, images, ...body } = await readJson(req);
       if (!body?.text?.trim()) return json(res, { error: 'empty comment' }, 400);
       const db = store.load();
       const c = store.add(db, body);
-      // the comment has to exist before a screenshot can be filed under its id
-      if (image) store.attach(db, c.id, image);
+      // the comment has to exist before a screenshot can be filed under its id;
+      // `image` is one from an older client, `images` the list a box now holds
+      for (const shot of [].concat(images ?? image ?? [])) store.attach(db, c.id, shot);
       store.save(db);
       return json(res, c, 201);
     }
     if (req.method === 'PATCH') {
-      const { id, reply: replyText, image, removeImage, edit, ...changes } = await readJson(req);
+      const { id, reply: replyText, image, images, removeImage, edit, ...changes } = await readJson(req);
       const db = store.load();
       // before anything else is touched: a refused edit writes nothing, its removals included
       if (edit && !(edit.text?.trim() && store.edit(db, id, edit.at ?? null, edit.text.trim()))) {
@@ -196,7 +197,7 @@ export function mitkaMiddleware({ root, options, routes }) {
       // written before its screenshot is filed: a screenshot belongs to the last message
       // older than it (threadOf), so this order is what puts it under its own reply.
       if (replyText?.trim()) store.reply(db, id, 'you', replyText.trim());
-      if (image) store.attach(db, id, image);
+      for (const shot of [].concat(images ?? image ?? [])) store.attach(db, id, shot);
       // one name from older clients, a list from an edit that dropped several
       for (const name of [].concat(removeImage || [])) store.detach(db, id, name);
       const c = Object.keys(changes).length || !replyText

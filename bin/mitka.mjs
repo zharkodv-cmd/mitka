@@ -95,6 +95,9 @@ if (cmd === '--selftest') {
   const rel = s.attach(t, 1, 'data:image/png;base64,iVBORw0KGgo=');
   assert.match(rel, /^feedback\/images\/1-\d+\.png$/, 'a screenshot lands under the comment id');
   assert.ok(existsSync(join(dir, rel)), 'and is written to disk');
+  const burst = [0, 1, 2].map(() => s.attach(t, 1, 'data:image/png;base64,iVBORw0KGgo='));
+  assert.equal(new Set([rel, ...burst]).size, 4, 'shots sent together, in one ms, each get their own file');
+  assert.ok(burst.every((p) => existsSync(join(dir, p))), 'and none overwrites another');
   assert.equal(s.detach(t, 1, 'not-mine.png'), false, 'a name this comment does not own is refused');
   assert.equal(s.detach(t, 1, rel), true);
   assert.ok(!existsSync(join(dir, rel)), 'detaching deletes the file');

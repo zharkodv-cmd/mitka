@@ -359,7 +359,7 @@ export function run(cfg: MitkaConfig) {
   let openId: number | null = null;
   let draft:
     | { selector: string; rx: number; ry: number; label: string; tag: string; classes: string[]; nth: number;
-        category: string; image?: string; text?: string }
+        category: string; images?: string[]; text?: string }
     | null = null;
   let notesRaf = 0;
   /* What is half-typed in the open thread's reply box. Only one card is ever open, so
@@ -367,10 +367,10 @@ export function run(cfg: MitkaConfig) {
      the textareas: picking a category or pasting a screenshot used to wipe the sentence
      you were in the middle of. */
   let replyDraft = "";
-  /* The screenshot waiting in the reply box, sent with the reply the way a new
-     comment's is. It used to be filed the moment it was pasted, with no text, and
+  /* The screenshots waiting in the reply box, sent with the reply the way a new
+     comment's are. They used to be filed the moment they were pasted, with no text, and
      drew under whoever wrote last — usually me. */
-  let replyImage = "";
+  let replyImages: string[] = [];
   /* The message being edited — the comment itself (`at` null) or one of your replies —
      with its text as it stands and the screenshots struck out so far. Nothing is written
      until Save, so Cancel puts everything back. */
@@ -380,7 +380,7 @@ export function run(cfg: MitkaConfig) {
      throwing it out; only the bin discards one. An empty draft just goes. One draft at a
      time: a click on the page while one is put away brings it back. */
   let draftShut = false;
-  const draftHasWork = () => Boolean(draft && (draft.text?.trim() || draft.image));
+  const draftHasWork = () => Boolean(draft && (draft.text?.trim() || draft.images?.length));
   const putDraftAway = () => { if (draftHasWork()) draftShut = true; else draft = null; };
   /* Which thread that half-typed reply belongs to. Checked at render rather than at
      each of the six places openId changes, so no path can carry one thread's text into
@@ -403,7 +403,7 @@ export function run(cfg: MitkaConfig) {
          lot. The sentence is the half worth keeping; the image is still on the clipboard. */
       try {
         localStorage.setItem(DRAFT_KEY, JSON.stringify(
-          { ...body, draft: draft && { ...draft, image: undefined } }));
+          { ...body, draft: draft && { ...draft, images: undefined } }));
       } catch { /* nothing to be done: keep typing, the file is still the record */ }
     }
   };
@@ -568,6 +568,10 @@ export function run(cfg: MitkaConfig) {
       return shot(src, id === undefined ? undefined : `data-id="${id}" data-img="${esc(name)}"`);
     }).join("")}</div>`;
 
+  /* The screenshots waiting in a box, each × keyed by its place in the list. */
+  const waiting = (list: string[] = []) =>
+    !list.length ? "" : `<div class="dt-note-shots">${list.map((src, i) => shot(src, `data-i="${i}"`)).join("")}</div>`;
+
   const CLIP = `<svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="2"/><circle cx="7.5" cy="8.5" r="1.4"/><path d="m3.5 14.5 4-4 3 3 2-2 4 4"/></svg>`;
 
   /* The box you write in: one bordered field holding the text, the screenshot waiting
@@ -620,7 +624,7 @@ export function run(cfg: MitkaConfig) {
   const renderNotes = () => {
     keepDraft();
     syncBpButtons();
-    if (openId !== replyFor) { replyDraft = ""; replyImage = ""; replyFor = openId; }
+    if (openId !== replyFor) { replyDraft = ""; replyImages = []; replyFor = openId; }
     if (edit && edit.id !== openId) edit = null;
     const bp0 = activeBp();
     renderBadge(bp0);
@@ -694,7 +698,7 @@ export function run(cfg: MitkaConfig) {
             }).join("")}
           </div>
           ${compose("dt-note-reply-input", "Reply", replyDraft, `data-act="reply" data-id="${c.id}"`,
-            replyImage ? `<div class="dt-note-shots">${shot(replyImage, "")}</div>` : "")}
+            waiting(replyImages))}
         </div>`;
       }
     }
@@ -719,7 +723,7 @@ export function run(cfg: MitkaConfig) {
           </div>
           ${cats(draft.category)}
           ${compose("dt-note-input", "Comment", draft.text ?? "", `data-act="save"`,
-            draft.image ? `<div class="dt-note-shots">${shot(draft.image, "")}</div>` : "")}
+            waiting(draft.images))}
         </div>`;
     }
     notesOverlay.innerHTML = html;
@@ -1144,36 +1148,43 @@ export function run(cfg: MitkaConfig) {
     return c.toDataURL("image/jpeg", 0.85);
   };
 
-  /* A screenshot for a comment — pasted, dropped on the card or picked with the clip
-     button. It waits in the box, a new comment's or a reply's, and goes with the text
-     when you send. */
-  const attachImage = async (file: File, card: Element | null) => {
-    let dataUrl: string;
-    try {
-      dataUrl = await shrink(file);
-    } catch {
-      toast("That image could not be read.");
-      return;
+  /* Screenshots for a comment — pasted, dropped on the card or picked with the clip
+     button. They wait in the box, a new comment's or a reply's, each one added to those
+     already there, and go with the text when you send. One slot used to hold them, so
+     every paste replaced the last. */
+  const attachImages = async (files: File[], card: Element | null) => {
+    const urls: string[] = [];
+    for (const file of files) {
+      let dataUrl: string;
+      try {
+        dataUrl = await shrink(file);
+      } catch {
+        toast("That image could not be read.");
+        continue;
+      }
+      if (dataUrl.length > MAX_SHOT) { toast("Screenshot is too large even after shrinking."); continue; }
+      urls.push(dataUrl);
     }
-    if (dataUrl.length > MAX_SHOT) { toast("Screenshot is too large even after shrinking."); return; }
+    if (!urls.length) return;
     if (!Number((card as HTMLElement | null)?.dataset.id)) {
-      if (draft) { draft.image = dataUrl; renderNotes(); }
+      if (draft) { (draft.images ??= []).push(...urls); renderNotes(); }
       return;
     }
-    replyImage = dataUrl;
+    replyImages.push(...urls);
     renderNotes();
     focusEnd(".dt-note-reply-input"); // a draft's box is refocused by the render itself
   };
-  const imageIn = (items?: DataTransferItemList | null) =>
-    [...(items ?? [])].find((i) => i.kind === "file" && i.type.startsWith("image/"))?.getAsFile();
+  const imagesIn = (items?: DataTransferItemList | null) =>
+    [...(items ?? [])].filter((i) => i.kind === "file" && i.type.startsWith("image/"))
+      .map((i) => i.getAsFile()!).filter(Boolean);
 
   /* Delegated because the textareas are rebuilt on every render, so a listener bound to
      one would not survive the first keystroke. */
   notesOverlay.addEventListener("paste", (e) => {
-    const file = imageIn((e as ClipboardEvent).clipboardData?.items);
-    if (!file) return; // plain text paste: leave it to the textarea
+    const files = imagesIn((e as ClipboardEvent).clipboardData?.items);
+    if (!files.length) return; // plain text paste: leave it to the textarea
     e.preventDefault();
-    attachImage(file, (e.target as Element).closest(".dt-note"));
+    attachImages(files, (e.target as Element).closest(".dt-note"));
   });
   notesOverlay.addEventListener("dragover", (e) => {
     if (!(e.target as Element).closest(".dt-note")) return;
@@ -1188,8 +1199,8 @@ export function run(cfg: MitkaConfig) {
     if (!card) return;
     e.preventDefault();
     card.querySelector(".dt-compose")?.removeAttribute("data-drop");
-    const file = imageIn(e.dataTransfer?.items);
-    if (file) attachImage(file, card);
+    const files = imagesIn(e.dataTransfer?.items);
+    if (files.length) attachImages(files, card);
   });
 
   /* Every render rebuilds the boxes, so one you were typing in has to be handed its
@@ -1254,16 +1265,17 @@ export function run(cfg: MitkaConfig) {
     if (!act) { openId = openId === id ? null : id; putDraftAway(); renderNotes(); return; }
     if (act === "attach") {
       // a throwaway input: the file picker is the only native way to a file
-      const pick = Object.assign(document.createElement("input"), { type: "file", accept: "image/*" });
+      const pick = Object.assign(document.createElement("input"), { type: "file", accept: "image/*", multiple: true });
       const card = btn.closest(".dt-note");
-      pick.addEventListener("change", () => { if (pick.files?.[0]) attachImage(pick.files[0], card); });
+      pick.addEventListener("change", () => { if (pick.files?.length) attachImages([...pick.files], card); });
       pick.click();
       return;
     }
     /* A screenshot still waiting in a box is simply dropped. A sent one shows its × only
-       in the message you are editing, and is struck out there until Save. */
+       in the message you are editing, and is struck out there until Save. Which box is
+       read off the card: a draft put away still holds its pictures while a thread is open. */
     if (act === "unshot") {
-      if (!id) { if (draft) delete draft.image; else replyImage = ""; }
+      if (!id) (btn.closest("[data-draft]") ? draft?.images ?? [] : replyImages).splice(Number(btn.dataset.i), 1);
       else if (edit) edit.drop.push(btn.dataset.img!);
       renderNotes();
       if (edit) focusEdit(); // Enter still saves
@@ -1339,16 +1351,16 @@ export function run(cfg: MitkaConfig) {
       const box = notesOverlay.querySelector<HTMLTextAreaElement>(".dt-note-reply-input")!;
       const text = box.value.trim();
       if (!text) { box.focus(); return; }
-      const image = replyImage;
+      const images = replyImages;
       replyDraft = "";
-      replyImage = "";
+      replyImages = [];
       const res = await fetch("/__devbar/comments", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id, reply: text, ...(image && { image }) }),
+        body: JSON.stringify({ id, reply: text, images }),
       });
       // put it back in the box rather than lose what you wrote
-      if (!res.ok) { replyDraft = text; replyImage = image; toast(`Reply was not sent (${res.status}).`); }
+      if (!res.ok) { replyDraft = text; replyImages = images; toast(`Reply was not sent (${res.status}).`); }
       await syncNotes();
       return;
     }

@@ -111,7 +111,13 @@ export function createStore(root) {
     const m = /^data:image\/(png|jpeg|webp|gif);base64,(.+)$/s.exec(dataUrl || '');
     if (!c || !m) return null;
     mkdirSync(imageDir, { recursive: true });
-    const name = `${c.id}-${Date.now()}.${m[1] === 'jpeg' ? 'jpg' : m[1]}`;
+    const ext = m[1] === 'jpeg' ? 'jpg' : m[1];
+    // Screenshots sent together are filed in the same ms, and a shared name overwrote
+    // all but the last. The stamp moves on rather than growing a suffix: threadOf reads
+    // it to place the picture under its message.
+    let ms = Date.now();
+    while (existsSync(join(imageDir, `${c.id}-${ms}.${ext}`))) ms++;
+    const name = `${c.id}-${ms}.${ext}`;
     writeFileSync(join(imageDir, name), Buffer.from(m[2], 'base64'));
     (c.images ||= []).push(rel(name));
     c.updatedAt = new Date().toISOString();
