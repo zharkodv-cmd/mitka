@@ -482,7 +482,9 @@ export function run(cfg: MitkaConfig) {
     try { return [...document.querySelectorAll(poolSelector(c.tag, c.classes))]; } catch { return []; }
   };
 
-  const resolveEl = (c: Note): Element | null => {
+  /* What a pin needs to find its element again: a sent thread has it, and so does a draft. */
+  type Pinned = Pick<Note, "selector" | "rx" | "ry" | "label" | "tag" | "classes" | "nth">;
+  const resolveEl = (c: Pinned): Element | null => {
     let el: Element | null = null;
     try { el = document.querySelector(c.selector); } catch { el = null; }
     if (el && sameText(el, c.label)) return el;
@@ -496,7 +498,7 @@ export function run(cfg: MitkaConfig) {
 
   /* Anchor is stored as a fraction of the element's box, so the pin keeps its place
      when the fluid layout rescales — an absolute offset would drift. */
-  const anchorOf = (c: Note) => {
+  const anchorOf = (c: Pinned) => {
     const el = resolveEl(c);
     if (!el) return null;
     const r = el.getBoundingClientRect();
@@ -702,16 +704,20 @@ export function run(cfg: MitkaConfig) {
         </div>`;
       }
     }
-    if (draft) {
-      const el = document.querySelector(draft.selector);
-      const r = el?.getBoundingClientRect();
-      const x = r ? r.left + r.width * draft.rx : 0;
-      const y = r ? r.top + r.height * draft.ry : 0;
+    /* Found the way a sent thread's pin is. A bare querySelector drew the card at 0,0,
+       or hid it, once its element was gone or hidden; every click on the page then
+       reopened a card nobody could see, and there was no reaching its bin. With no
+       element the card goes where an orphaned thread's does, and the pencil pin, which
+       would point at nothing, is not drawn. */
+    const da = draft && anchorOf(draft);
+    if (draft && (da || !draftShut)) {
+      const x = da?.x ?? 0;
+      const y = da?.y ?? 0;
       html += draftShut
         ? `<button class="dt-pin dt-pin--draft" data-draft data-act="draft-open" style="left:${x}px;top:${y}px"
             title="Draft, not sent — click to finish it">${PENCIL}</button>`
-        : `<span class="dt-pin dt-pin--draft" data-draft style="left:${x}px;top:${y}px"></span>
-        <div class="dt-note" data-draft style="left:${x}px;top:${y}px">
+        : `${da ? `<span class="dt-pin dt-pin--draft" data-draft style="left:${x}px;top:${y}px"></span>` : ""}
+        <div class="dt-note${da ? "" : " dt-note--orphan"}" data-draft style="left:${x}px;top:${y}px">
           <div class="dt-note-bar">
             <span class="dt-note-el">${esc(elName(draft.tag, draft.classes))}</span>
             ${onIcon(draft.label)}
@@ -721,6 +727,7 @@ export function run(cfg: MitkaConfig) {
               <button data-act="cancel" title="Close — the draft stays">${CROSS}</button>
             </span>
           </div>
+          ${da ? "" : `<p class="dt-note-orphan">The element this was pinned to is not on the page right now.</p>`}
           ${cats(draft.category)}
           ${compose("dt-note-input", "Comment", draft.text ?? "", `data-act="save"`,
             waiting(draft.images))}
@@ -760,13 +767,13 @@ export function run(cfg: MitkaConfig) {
       el.style.top = `${a.y}px`;
     }
     // the draft too, put away or open, placed the way renderNotes places it
-    const d = draft;
-    const r = d && document.querySelector(d.selector)?.getBoundingClientRect();
+    const a = draft && anchorOf(draft);
     for (const el of notesOverlay.querySelectorAll<HTMLElement>("[data-draft]")) {
-      if (!d || !r) { el.style.visibility = "hidden"; continue; }
+      if (el.classList.contains("dt-note--orphan")) continue;
+      if (!a) { el.style.visibility = "hidden"; continue; }
       el.style.visibility = "";
-      el.style.left = `${r.left + r.width * d.rx}px`;
-      el.style.top = `${r.top + r.height * d.ry}px`;
+      el.style.left = `${a.x}px`;
+      el.style.top = `${a.y}px`;
     }
   };
   /* The history is the same data as the pins, read as a list: every thread on this
@@ -1084,6 +1091,12 @@ export function run(cfg: MitkaConfig) {
     if (draftHasWork()) {
       draftShut = false;
       openId = null;
+      /* Brought on screen the way goTo brings a thread: the draft was usually written
+         further down, and a card opened out of sight read as a click that did nothing.
+         Instant and before the render, which decides from where the card lands whether
+         it flips. */
+      const a = anchorOf(draft!);
+      if (a && (a.y < 0 || a.y > innerHeight)) scrollTo({ top: scrollY + a.y - innerHeight / 3, behavior: "instant" });
       renderNotes();
       toast("Send or discard this draft first.");
       return;
