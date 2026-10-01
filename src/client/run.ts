@@ -357,10 +357,9 @@ export function run(cfg: MitkaConfig) {
   let notes: Note[] = [];
   let notesOn = false;
   let openId: number | null = null;
-  let draft:
-    | { selector: string; rx: number; ry: number; label: string; tag: string; classes: string[]; nth: number;
-        category: string; images?: string[]; text?: string }
-    | null = null;
+  type Draft = { selector: string; rx: number; ry: number; label: string; tag: string; classes: string[]; nth: number;
+    category: string; images?: string[]; text?: string };
+  let draft: Draft | null = null;
   let notesRaf = 0;
   /* What is half-typed in the open thread's reply box. Only one card is ever open, so
      one variable does it. Both this and draft.text exist because every render rebuilds
@@ -375,13 +374,15 @@ export function run(cfg: MitkaConfig) {
      with its text as it stands and the screenshots struck out so far. Nothing is written
      until Save, so Cancel puts everything back. */
   let edit: { id: number; at: string | null; text: string; drop: string[] } | null = null;
-  /* A draft with something in it is work. Closing its card, the mode or opening another
-     thread puts it away — pinned where you left it, marked as a draft — instead of
-     throwing it out; only the bin discards one. An empty draft just goes. One draft at a
-     time: a click on the page while one is put away brings it back. */
-  let draftShut = false;
-  const draftHasWork = () => Boolean(draft && (draft.text?.trim() || draft.images?.length));
-  const putDraftAway = () => { if (draftHasWork()) draftShut = true; else draft = null; };
+  /* A draft with something in it is work. Closing its card, the mode, opening another
+     thread or clicking somewhere else on the page parks it — a pencil pin where you left
+     it and a row in the panel — instead of throwing it out; only the bin discards one.
+     An empty draft just goes. Parked drafts never stand in the way: there used to be one
+     draft at a time, and while it held text every click on the page reopened it, so
+     nothing else could be commented on until it was sent or binned. */
+  let parked: Draft[] = [];
+  const draftHasWork = (d = draft) => Boolean(d && (d.text?.trim() || d.images?.length));
+  const putDraftAway = () => { if (draft && draftHasWork()) parked.push(draft); draft = null; };
   /* Which thread that half-typed reply belongs to. Checked at render rather than at
      each of the six places openId changes, so no path can carry one thread's text into
      another's box. */
@@ -396,14 +397,15 @@ export function run(cfg: MitkaConfig) {
   const DRAFT_KEY = `dt-draft:${ROUTE}${inFrame ? ":canvas" : ""}`;
   let draftSave = 0;
   const writeDraft = () => {
-    if (!draft && !replyDraft) { localStorage.removeItem(DRAFT_KEY); return; }
-    const body = { draft, reply: replyDraft ? { for: replyFor, text: replyDraft } : null };
+    if (!draft && !parked.length && !replyDraft) { localStorage.removeItem(DRAFT_KEY); return; }
+    const body = { draft, parked, reply: replyDraft ? { for: replyFor, text: replyDraft } : null };
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(body)); } catch {
       /* A pasted screenshot is a data URL of megabytes and the ~5 MB store refuses the
          lot. The sentence is the half worth keeping; the image is still on the clipboard. */
+      const bare = (d: Draft) => ({ ...d, images: undefined });
       try {
         localStorage.setItem(DRAFT_KEY, JSON.stringify(
-          { ...body, draft: draft && { ...draft, images: undefined } }));
+          { ...body, draft: draft && bare(draft), parked: parked.map(bare) }));
       } catch { /* nothing to be done: keep typing, the file is still the record */ }
     }
   };
@@ -595,6 +597,15 @@ export function run(cfg: MitkaConfig) {
   const elName = (tag?: string, classes?: string[]) =>
     (tag || "element") + (classes?.[0] ? "." + classes[0] : "");
 
+  /* The parked drafts as the panel lists them. Plain data, because in a canvas the
+     drafts live in the copy and the panel in the page: the copy posts these up. */
+  type DraftRow = { i: number; el: string; text: string; shots: number; orphan: boolean };
+  const draftRows = (): DraftRow[] => parked.map((d, i) => ({
+    i, el: elName(d.tag, d.classes), text: clean(d.text ?? ""), shots: d.images?.length ?? 0, orphan: !anchorOf(d),
+  }));
+  let frameDrafts: DraftRow[] = []; // the page: what the canvas copy last posted
+  let sentDrafts = ""; // the copy: what it last posted, so a render that changed nothing stays quiet
+
   /* "img · resolved by claude" spent most of the bar on a word you read once. The mark
      says it in the same ringed 22px circle as the tick beside it, and matches the pin
      on the page. Only for my state: once you close a thread the tick next to it is
@@ -641,6 +652,11 @@ export function run(cfg: MitkaConfig) {
 
   const renderNotes = () => {
     keepDraft();
+    if (inFrame) {
+      const rows = draftRows();
+      const s = JSON.stringify(rows);
+      if (s !== sentDrafts) { sentDrafts = s; parent.postMessage({ dt: true, drafts: rows }, location.origin); }
+    }
     syncBpButtons();
     if (openId !== replyFor) { replyDraft = ""; replyImages = []; replyFor = openId; }
     if (edit && edit.id !== openId) edit = null;
@@ -716,19 +732,20 @@ export function run(cfg: MitkaConfig) {
         </div>`;
       }
     }
-    /* Found the way a sent thread's pin is. A bare querySelector drew the card at 0,0,
-       or hid it, once its element was gone or hidden; every click on the page then
-       reopened a card nobody could see, and there was no reaching its bin. With no
-       element the card goes where an orphaned thread's does, and the pencil pin, which
-       would point at nothing, is not drawn. */
+    /* Drafts are found the way a sent thread's pin is. A bare querySelector drew the
+       card at 0,0, or hid it, once its element was gone or hidden. With no element a
+       parked draft gets no pencil — it would point at nothing; its row in the panel
+       still opens it — and an open one goes where an orphaned thread's card does. */
+    parked.forEach((d, i) => {
+      const a = anchorOf(d);
+      if (a) html += `<button class="dt-pin dt-pin--draft" data-parked="${i}" data-act="draft-open" data-i="${i}"
+        style="left:${a.x}px;top:${a.y}px" title="Draft, not sent — click to finish it">${PENCIL}</button>`;
+    });
     const da = draft && anchorOf(draft);
-    if (draft && (da || !draftShut)) {
+    if (draft) {
       const x = da?.x ?? 0;
       const y = da?.y ?? 0;
-      html += draftShut
-        ? `<button class="dt-pin dt-pin--draft" data-draft data-act="draft-open" style="left:${x}px;top:${y}px"
-            title="Draft, not sent — click to finish it">${PENCIL}</button>`
-        : `${da ? `<span class="dt-pin dt-pin--draft" data-draft style="left:${x}px;top:${y}px"></span>` : ""}
+      html += `${da ? `<span class="dt-pin dt-pin--draft" data-draft style="left:${x}px;top:${y}px"></span>` : ""}
         <div class="dt-note${da ? "" : " dt-note--orphan"}" data-draft style="left:${x}px;top:${y}px">
           <div class="dt-note-bar">
             <span class="dt-note-el">${esc(elName(draft.tag, draft.classes))}</span>
@@ -778,10 +795,11 @@ export function run(cfg: MitkaConfig) {
       el.style.left = `${a.x}px`;
       el.style.top = `${a.y}px`;
     }
-    // the draft too, put away or open, placed the way renderNotes places it
-    const a = draft && anchorOf(draft);
-    for (const el of notesOverlay.querySelectorAll<HTMLElement>("[data-draft]")) {
+    // the drafts too, parked or open, placed the way renderNotes places them
+    for (const el of notesOverlay.querySelectorAll<HTMLElement>("[data-draft], [data-parked]")) {
       if (el.classList.contains("dt-note--orphan")) continue;
+      const d = el.dataset.parked ? parked[Number(el.dataset.parked)] : draft;
+      const a = d && anchorOf(d);
       if (!a) { el.style.visibility = "hidden"; continue; }
       el.style.visibility = "";
       el.style.left = `${a.x}px`;
@@ -860,6 +878,21 @@ export function run(cfg: MitkaConfig) {
     /* The eye hides threads you have already signed off, not mine: mine are the queue
        it exists to keep you from losing. */
     const shown = GROUPS.filter((k) => byState[k].length && (k !== "done" || showResolved));
+    /* Parked drafts head the list: unsent, so nobody else will ever finish them. Not
+       per band — a draft is filed when it is sent, under the band it is sent from. In a
+       canvas they are the copy's, posted up; the copy owns the pins. */
+    const drafts = frame.hidden ? draftRows() : frameDrafts;
+    const draftRow = (d: DraftRow) => `<div class="dt-hist-row is-draft">
+        <button class="dt-hist-go" data-draft-go="${d.i}">
+          <span class="dt-hist-n">${PENCIL}</span>
+          <span class="dt-hist-body">
+            <span class="dt-hist-id">${esc(d.el)}${
+              d.orphan ? `<b class="dt-hist-orphan" title="The element this was pinned to is not on the page right now">no pin</b>` : ""}</span>
+            <span class="dt-hist-text">${d.text ? esc(d.text) : `${d.shots} screenshot${d.shots === 1 ? "" : "s"}`}</span>
+          </span>
+        </button>
+        <span class="dt-note-tools dt-hist-tools"><button data-draft-rm="${d.i}" title="Discard this draft">${TRASH}</button></span>
+      </div>`;
     history.innerHTML =
       `<div class="dt-hist-head">
          <span class="dt-hist-here" title="${hereIcon?.label ?? bp}"
@@ -873,8 +906,10 @@ export function run(cfg: MitkaConfig) {
            <svg viewBox="0 0 20 20" width="13" height="13" aria-hidden="true"><path d="M5.5 8.5 10 12.5l4.5-4"/></svg>
          </button>
        </div>` +
-      (shown.length
-        ? `<div class="dt-hist-list">${shown.map((k) =>
+      (shown.length || drafts.length
+        ? `<div class="dt-hist-list">${
+            drafts.length ? `<p class="dt-hist-group">Drafts<em>${drafts.length}</em></p>${drafts.map(draftRow).join("")}` : ""}${
+            shown.map((k) =>
             `<p class="dt-hist-group">${STATE_LABEL[k]}<em>${byState[k].length}</em></p>` +
             byState[k].map(row).join("")).join("")}</div>`
         : `<p class="dt-hist-empty">${byState.done.length
@@ -912,6 +947,16 @@ export function run(cfg: MitkaConfig) {
     }
     const band = (e.target as Element).closest<HTMLButtonElement>(".dt-hist-bands [data-bp]");
     if (band) { pickBp(band.dataset.bp!); return; }
+    const d = (e.target as Element).closest<HTMLElement>("[data-draft-go], [data-draft-rm]");
+    if (d) {
+      const drop = d.dataset.draftRm !== undefined;
+      const i = Number(drop ? d.dataset.draftRm : d.dataset.draftGo);
+      // in a canvas the drafts are the copy's, like the pins
+      if (!frame.hidden) tellFrame(drop ? { dropDraft: i } : { openDraft: i });
+      else if (drop) dropDraft(i);
+      else showDraft(i);
+      return;
+    }
     /* Settled from the list: the row stays where it is, only its group changes. */
     const tool = (e.target as Element).closest<HTMLButtonElement>(".dt-hist-tools [data-act]");
     if (tool) {
@@ -952,6 +997,22 @@ export function run(cfg: MitkaConfig) {
     notesOverlay.querySelector<HTMLElement>(`.dt-pin[data-id="${id}"]`)
       ?.animate([{ transform: "scale(1)" }, { transform: "scale(1.5)" }, { transform: "scale(1)" }], 400);
   };
+
+  /* Back to a parked draft; the one open now is parked in its place. Scrolled on screen
+     the way goTo brings a thread — a card opened out of sight reads as a click that did
+     nothing. Instant and before the render, which decides from where the card lands
+     whether it flips. */
+  const showDraft = (i: number) => {
+    const [d] = parked.splice(i, 1);
+    if (!d) return;
+    putDraftAway();
+    draft = d;
+    openId = null;
+    const a = anchorOf(d);
+    if (a && (a.y < 0 || a.y > innerHeight)) scrollTo({ top: scrollY + a.y - innerHeight / 3, behavior: "instant" });
+    renderNotes();
+  };
+  const dropDraft = (i: number) => { parked.splice(i, 1); renderNotes(); };
 
   const setHistory = (on: boolean) => {
     history.hidden = !on;
@@ -1071,7 +1132,11 @@ export function run(cfg: MitkaConfig) {
     hiRaf = requestAnimationFrame(() => {
       hiRaf = 0;
       const t = e.target as Element;
-      if (draft || t.closest(NOT_PINNABLE)) {
+      /* notesOn: the frame lands after the mouse move that asked for it, and Esc or C in
+         between turned the mode off — the outline was then drawn after setNotes had hidden
+         it, and stayed on the page with nothing left to clear it. While a draft is open
+         the outline stays too: a click there now starts a new comment. */
+      if (!notesOn || t.closest(NOT_PINNABLE)) {
         hi.hidden = true;
         return;
       }
@@ -1096,7 +1161,7 @@ export function run(cfg: MitkaConfig) {
     if (e.key !== "Escape" || e.isComposing) return;
     e.preventDefault();
     if (edit) { edit = null; renderNotes(); return; }
-    if (draft && !draftShut) { putDraftAway(); renderNotes(); return; }
+    if (draft) { putDraftAway(); renderNotes(); return; }
     if (openId !== null) { openId = null; renderNotes(); return; }
     setNotes(false);
   };
@@ -1108,23 +1173,13 @@ export function run(cfg: MitkaConfig) {
     e.preventDefault();
     e.stopPropagation();
     if (swallowClick) { swallowClick = false; return; }
-    if (draftHasWork()) {
-      draftShut = false;
-      openId = null;
-      /* Brought on screen the way goTo brings a thread: the draft was usually written
-         further down, and a card opened out of sight read as a click that did nothing.
-         Instant and before the render, which decides from where the card lands whether
-         it flips. */
-      const a = anchorOf(draft!);
-      if (a && (a.y < 0 || a.y > innerHeight)) scrollTo({ top: scrollY + a.y - innerHeight / 3, behavior: "instant" });
-      renderNotes();
-      toast("Send or discard this draft first.");
-      return;
-    }
+    // a drag that selected text is a copy, not a pin
+    if (!getSelection()?.isCollapsed) return;
     notesOverlay.hidden = true;
     const el = document.elementFromPoint(e.clientX, e.clientY);
     notesOverlay.hidden = false;
     if (!el) return;
+    putDraftAway();
     const r = el.getBoundingClientRect();
     const tag = el.tagName.toLowerCase();
     const classes = [...el.classList].filter((k) => !/^(astro|svelte|css)-/.test(k)).slice(0, 2);
@@ -1342,8 +1397,8 @@ export function run(cfg: MitkaConfig) {
       return;
     }
     if (act === "cancel") { putDraftAway(); renderNotes(); return; }
-    if (act === "discard") { draft = null; draftShut = false; renderNotes(); return; }
-    if (act === "draft-open") { draftShut = false; openId = null; renderNotes(); return; }
+    if (act === "discard") { draft = null; renderNotes(); return; }
+    if (act === "draft-open") { showDraft(Number(btn.dataset.i)); return; }
     if (act === "close") { openId = null; renderNotes(); return; }
     /* On a draft the tag is not written anywhere yet, so it is a local edit; on a
        saved thread it is a patch like any other. */
@@ -1376,7 +1431,6 @@ export function run(cfg: MitkaConfig) {
       // the draft stays where it is rather than vanish with the failed write
       if (!res.ok) { toast(`Comment was not saved (${res.status}).`); return; }
       draft = null;
-      draftShut = false;
       await syncNotes();
       return;
     }
@@ -1428,13 +1482,16 @@ export function run(cfg: MitkaConfig) {
     const m = e.data as {
       hello?: boolean; notes?: boolean; reload?: boolean; grid?: boolean;
       inspect?: Inspector; open?: number; resolved?: boolean; scrollbar?: string; device?: string;
-      key?: [string, boolean]; closeMenus?: boolean;
+      key?: [string, boolean]; closeMenus?: boolean; drafts?: DraftRow[]; openDraft?: number; dropDraft?: number;
     };
     // a key pressed or a click made inside the canvas, handed up to the bar that owns it
     if (!inFrame && e.source === frameEl.contentWindow) {
       if (m.key) { keyFor(m.key[0], m.key[1])?.run(); return; }
       if (m.closeMenus) { closeMenus(); return; }
+      if (m.drafts) { frameDrafts = m.drafts; renderHistory(activeBp()); return; }
     }
+    if (inFrame && typeof m.openDraft === "number") { showDraft(m.openDraft); return; }
+    if (inFrame && typeof m.dropDraft === "number") { dropDraft(m.dropDraft); return; }
     if (inFrame && typeof m.device === "string") deviceLabel = m.device;
     // Windows draws a scrollbar that takes width; the copy shows one when told to
     if (inFrame && m.scrollbar) document.documentElement.classList.toggle("dt-sb-classic", m.scrollbar === "classic");
@@ -1488,10 +1545,9 @@ export function run(cfg: MitkaConfig) {
       sizer.observe(document.body);
       loadNotes();
     } else {
-      /* Put away, not dropped: turning the mode back on brings the card back open —
-         you were in the middle of it. */
+      /* Put away, not dropped: parked where it was, with its pencil and its row in the
+         panel to bring it back when the mode is on again. */
       putDraftAway();
-      draftShut = false;
       openId = null;
       /* The canvas stays where it is: picking an inspector turns comment mode off, and
          sending the window back to desktop here tore the canvas down under it. */
@@ -1664,6 +1720,7 @@ export function run(cfg: MitkaConfig) {
       // leaving the canvas means following the real window again
       bpFilter = null;
       frameDevice = "";
+      frameDrafts = [];
       syncBpButtons();
       syncDeviceMenu();
       if (notesOn) loadNotes(); else renderNotes();
@@ -2028,22 +2085,25 @@ export function run(cfg: MitkaConfig) {
     if (savedInspect && savedInspect in inspectBtns) setInspect(savedInspect);
     setNotes(localStorage.getItem(NOTES_KEY) === "1");
   }
-  /* Whatever was half-written when the page went away. The pin is redrawn from its
-     selector like any saved comment's, so a draft survives HMR the same way sent ones
-     do; an element that no longer exists takes its draft with it. In the canvas the
-     draft waits for the page to switch comment mode on. */
+  /* Whatever was half-written when the page went away. The pins are redrawn from their
+     selectors like any saved comment's, so drafts survive HMR the same way sent ones do.
+     The card you were typing in comes back open; with its element gone it is parked
+     instead, reachable from the panel. In the canvas the drafts wait for the page to
+     switch comment mode on. */
   try {
     const saved = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
+    // a draft that was only a screenshot is empty once the store had to drop the image
+    parked = (saved?.parked ?? []).filter((d: Draft) => draftHasWork(d));
     if (saved?.draft && document.querySelector(saved.draft.selector)) {
       draft = saved.draft;
       if (!notesOn && !inFrame) setNotes(true); // the sentence is unreachable with the mode off
-    }
+    } else if (draftHasWork(saved?.draft)) parked.push(saved.draft);
     if (saved?.reply?.text) {
       replyDraft = saved.reply.text;
       // openId last: renderNotes drops the reply when it belongs to another thread
       replyFor = openId = saved.reply.for ?? null;
     }
-    if (draft || replyDraft) renderNotes();
+    if (draft || parked.length || replyDraft) renderNotes();
   } catch { localStorage.removeItem(DRAFT_KEY); }
 
   if (!notesOn) loadNotes(); // badge shows the open count even with the mode off

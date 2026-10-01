@@ -7,7 +7,8 @@
 export const ICONS = {
   desktop: '<rect x="2" y="4" width="16" height="10" rx="1.5"/><path d="M7 17h6M10 14v3"/>',
   laptop: '<rect x="3" y="5" width="14" height="9" rx="1.5"/><path d="M1.5 16.5h17"/>',
-  tablet: '<rect x="5" y="2" width="10" height="16" rx="1.5"/><path d="M9 15.5h2"/>',
+  // iPad's 3:4-ish, not a wider phone: at 10×16 it read as one more phone beside portrait
+  tablet: '<rect x="3.5" y="2.5" width="13" height="15" rx="1.5"/><path d="M9 15h2"/>',
   landscape: '<rect x="2" y="6" width="16" height="9" rx="1.5"/><path d="M15.5 9v3"/>',
   portrait: '<rect x="6" y="2" width="8" height="16" rx="1.5"/><path d="M9 15.5h2"/>',
 };

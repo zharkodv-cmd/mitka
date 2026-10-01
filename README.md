@@ -15,7 +15,9 @@ It exists only under `astro dev`. Nothing of it reaches a build.
   colour by token name). Values are *design* px: actual px ÷ the root font scale.
 - **Comments** — Figma-style pins: threads, four tags, screenshots (paste, drop or pick)
   that go with the message they were sent with, your own messages editable, a half-written
-  comment kept as a draft pin when you close it. Filed per page and per breakpoint.
+  comment parked as a draft — a pencil pin on the page and a row in the panel — when you
+  close it or click somewhere else; drafts never block a new comment. Filed per page and
+  per breakpoint.
 - **Keys** — one key per tool, Figma-style: `C` comments, `⇧C` panel, `R` resolved, `G` grid,
   `P`/`S`/`T` inspectors, `E` Sanity, `1`–`9` breakpoints, `D` devices, `[` `]` pages, `\` hide
   the bar, `?` the list (also behind the keyboard button). Physical keys, so any layout works;
